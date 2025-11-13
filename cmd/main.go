@@ -9,6 +9,18 @@ import (
 	"time"
 )
 
+type UserInputError struct {
+	msg string
+}
+
+func (e UserInputError) Error() string {
+	return "[ERROR] " + e.msg
+}
+
+func NewUserInputError(msg string) error {
+	return UserInputError{msg: msg}
+}
+
 // 기능 추가 : 이월, 상한,
 type Lottos struct {
 	lottos         []Lotto
@@ -27,20 +39,28 @@ const (
 	LottoPrice  = 1000
 )
 
-// 당첨 번호 설정
-func (l *Lottos) SetWinningNumbers(input string) {
-	parsed := parseWinningNumbers(input)
+func (l *Lottos) SetWinningNumbers(input string) error {
+	parsed, err := parseWinningNumbers(input)
+	if err != nil {
+		return err
+	}
 	l.winningNumbers = parsed
+	return nil
 }
 
-// 보너스 번호 설정
-func (l *Lottos) SetBonusNumber(input string) {
-	parsed := parseBonusNumber(input, l.winningNumbers)
+func (l *Lottos) SetBonusNumber(input string) error {
+	parsed, err := parseBonusNumber(input, l.winningNumbers)
+	if err != nil {
+		return err
+	}
 	l.bonusNumber = parsed
+	return nil
 }
 
-func purchaseLottos(amount int) Lottos {
-	validatePurchaseAmount(amount)
+func purchaseLottos(amount int) (Lottos, error) {
+	if err := validatePurchaseAmount(amount); err != nil {
+		return Lottos{}, err
+	}
 
 	count := amount / LottoPrice
 	lottos := make([]Lotto, 0, count)
@@ -52,54 +72,69 @@ func purchaseLottos(amount int) Lottos {
 
 	return Lottos{
 		lottos: lottos,
-	}
+	}, nil
 }
 
-func validatePurchaseAmount(amount int) {
+func validatePurchaseAmount(amount int) error {
 	if amount <= 0 {
-		panic("구매 금액은 양수여야 합니다.")
+		return NewUserInputError("구매 금액은 양수여야 합니다.")
 	}
 	if amount%LottoPrice != 0 {
-		panic(fmt.Sprintf("구매 금액은 %d원 단위여야 합니다.", LottoPrice))
+		return NewUserInputError(fmt.Sprintf("구매 금액은 %d원 단위여야 합니다.", LottoPrice))
 	}
+	return nil
 }
 
-func parseWinningNumbers(input string) []int {
+func parseWinningNumbers(input string) ([]int, error) {
 	tokens := splitAndClean(input)
 
 	if len(tokens) != LottoSize {
-		panic(fmt.Sprintf("당첨 번호는 %d개여야 합니다. 입력 개수: %d",
-			LottoSize, len(tokens)))
+		return nil, NewUserInputError(
+			fmt.Sprintf("당첨 번호는 %d개여야 합니다. 입력 개수: %d", LottoSize, len(tokens)),
+		)
 	}
 
 	nums := make([]int, 0, LottoSize)
 
 	for _, t := range tokens {
-		n := parseInt(t)
-		validateRange(n)
+		n, err := parseInt(t)
+		if err != nil {
+			return nil, err
+		}
+		if err := validateRange(n); err != nil {
+			return nil, err
+		}
 		nums = append(nums, n)
 	}
 
-	validateNoDuplicates(nums)
+	if err := validateNoDuplicates(nums); err != nil {
+		return nil, err
+	}
 
 	sort.Ints(nums)
-	return nums
+	return nums, nil
 }
 
-func parseBonusNumber(input string, winning []int) int {
+func parseBonusNumber(input string, winning []int) (int, error) {
 	input = strings.TrimSpace(input)
 	if input == "" {
-		panic("보너스 번호를 입력해야 합니다.")
+		return 0, NewUserInputError("보너스 번호를 입력해야 합니다.")
 	}
 
-	n := parseInt(input)
-	validateRange(n)
-
+	n, err := parseInt(input)
+	if err != nil {
+		return 0, err
+	}
+	if err := validateRange(n); err != nil {
+		return 0, err
+	}
 	if contains(winning, n) {
-		panic(fmt.Sprintf("보너스 번호는 당첨 번호와 중복될 수 없습니다: %d", n))
+		return 0, NewUserInputError(
+			fmt.Sprintf("보너스 번호는 당첨 번호와 중복될 수 없습니다: %d", n),
+		)
 	}
 
-	return n
+	return n, nil
 }
 
 func splitAndClean(input string) []string {
@@ -115,29 +150,34 @@ func splitAndClean(input string) []string {
 	return clean
 }
 
-func parseInt(s string) int {
+func parseInt(s string) (int, error) {
 	n, err := strconv.Atoi(s)
 	if err != nil {
-		panic(fmt.Sprintf("숫자가 아닌 값이 포함됨: %q", s))
+		return 0, NewUserInputError(fmt.Sprintf("숫자가 아닌 값이 포함됨: %q", s))
 	}
-	return n
+	return n, nil
 }
 
-func validateRange(n int) {
+func validateRange(n int) error {
 	if n < LottoMinNum || n > LottoMaxNum {
-		panic(fmt.Sprintf("번호는 %d~%d 사이여야 합니다: %d",
-			LottoMinNum, LottoMaxNum, n))
+		return NewUserInputError(
+			fmt.Sprintf("번호는 %d~%d 사이여야 합니다: %d", LottoMinNum, LottoMaxNum, n),
+		)
 	}
+	return nil
 }
 
-func validateNoDuplicates(nums []int) {
+func validateNoDuplicates(nums []int) error {
 	seen := make(map[int]bool)
 	for _, n := range nums {
 		if seen[n] {
-			panic(fmt.Sprintf("중복된 번호가 있습니다: %d", n))
+			return NewUserInputError(
+				fmt.Sprintf("중복된 번호가 있습니다: %d", n),
+			)
 		}
 		seen[n] = true
 	}
+	return nil
 }
 
 func generateRandomNumbers() []int {
@@ -170,11 +210,21 @@ func sortLottoNumbers(n []int) []int {
 }
 
 func main() {
-	lottos := purchaseLottos(5000)
+	lottos, err := purchaseLottos(5000)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
 
-	lottos.SetWinningNumbers("1, 2, 3, 4, 5, 6")
+	if err := lottos.SetWinningNumbers("1, 2, 3, 4, 5, 6"); err != nil {
+		fmt.Println(err)
+		return
+	}
 
-	lottos.SetBonusNumber("7")
+	if err := lottos.SetBonusNumber("7"); err != nil {
+		fmt.Println(err)
+		return
+	}
 
 	fmt.Println("당첨 번호:", lottos.winningNumbers)
 	fmt.Println("보너스 번호:", lottos.bonusNumber)
