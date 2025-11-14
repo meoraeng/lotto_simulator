@@ -57,6 +57,10 @@ func (l *Lottos) SetBonusNumber(input string) error {
 	return nil
 }
 
+func init() {
+	rand.Seed(time.Now().UnixNano())
+}
+
 func purchaseLottos(amount int) (Lottos, error) {
 	if err := validatePurchaseAmount(amount); err != nil {
 		return Lottos{}, err
@@ -181,18 +185,17 @@ func validateNoDuplicates(nums []int) error {
 }
 
 func generateRandomNumbers() []int {
-	src := rand.NewSource(time.Now().UnixNano())
-	r := rand.New(src)
-
 	numbers := make([]int, 0, LottoSize)
 
 	for len(numbers) < LottoSize {
-		num := r.Intn(LottoMaxNum) + 1
+		num := rand.Intn(LottoMaxNum) + 1
 		if !contains(numbers, num) {
 			numbers = append(numbers, num)
 		}
 	}
-	return sortLottoNumbers(numbers)
+	sort.Ints(numbers)
+
+	return numbers
 }
 
 func contains(slice []int, target int) bool {
@@ -204,9 +207,55 @@ func contains(slice []int, target int) bool {
 	return false
 }
 
-func sortLottoNumbers(n []int) []int {
-	sort.Ints(n)
-	return n
+type Rank int
+
+const (
+	RankNone Rank = iota
+	Rank5
+	Rank4
+	Rank3
+	Rank2
+	Rank1
+)
+
+const (
+	PrizeRank1 = 2_000_000_000
+	PrizeRank2 = 30_000_000
+	PrizeRank3 = 1_500_000
+	PrizeRank4 = 50_000
+	PrizeRank5 = 5_000
+)
+
+var prizes = [...]int{
+	RankNone: 0,
+	Rank5:    PrizeRank5,
+	Rank4:    PrizeRank4,
+	Rank3:    PrizeRank3,
+	Rank2:    PrizeRank2,
+	Rank1:    PrizeRank1,
+}
+
+func (r Rank) Prize() int {
+	return prizes[r]
+}
+
+func DetermineRank(matchCount int, hasBonus bool) Rank {
+	if matchCount == 6 {
+		return Rank1
+	}
+	if matchCount == 5 {
+		if hasBonus {
+			return Rank2
+		}
+		return Rank3
+	}
+	if matchCount == 4 {
+		return Rank4
+	}
+	if matchCount == 3 {
+		return Rank5
+	}
+	return RankNone
 }
 
 func main() {
@@ -215,17 +264,21 @@ func main() {
 		fmt.Println(err)
 		return
 	}
+	fmt.Printf("구매 확인 %d장", len(lottos.lottos))
+	fmt.Println("\n발매된 번호")
+	for _, lotto := range lottos.lottos {
+		fmt.Printf("%v\n", lotto.numbers)
+	}
 
-	if err := lottos.SetWinningNumbers("1, 2, 3, 4, 5, 6"); err != nil {
+	if err := lottos.SetWinningNumbers("1,2,3,4,5,6"); err != nil {
 		fmt.Println(err)
 		return
 	}
+	fmt.Printf("당첨 번호: %v\n", lottos.winningNumbers)
 
 	if err := lottos.SetBonusNumber("7"); err != nil {
 		fmt.Println(err)
 		return
 	}
 
-	fmt.Println("당첨 번호:", lottos.winningNumbers)
-	fmt.Println("보너스 번호:", lottos.bonusNumber)
 }
