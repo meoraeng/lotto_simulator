@@ -59,6 +59,47 @@ func (l *Lottos) SetBonusNumber(input string) error {
 	return nil
 }
 
+func (lt Lotto) matchCount(winning []int) int {
+	count := 0
+	for _, n := range lt.Numbers {
+		if contains(winning, n) {
+			count++
+		}
+	}
+	return count
+}
+
+func (lt Lotto) hasBonus(bonus int) bool {
+	return contains(lt.Numbers, bonus)
+}
+
+func (ls Lottos) CompileStatistics() map[Rank]int {
+	stats := make(map[Rank]int)
+
+	for _, lotto := range ls.Lottos {
+		match := lotto.matchCount(ls.WinningNumbers)
+		hasBonus := lotto.hasBonus(ls.BonusNumber)
+		rank := DetermineRank(match, hasBonus)
+		stats[rank]++
+	}
+	return stats
+}
+
+func CalculateTotalPrize(stats map[Rank]int) int {
+	total := 0
+	for rank, count := range stats {
+		total += rank.Prize() * count
+	}
+	return total
+}
+
+func CalculateProfitRate(totalPrize, purchaseAmount int) float64 {
+	if purchaseAmount == 0 {
+		return 0
+	}
+	return float64(totalPrize) / float64(purchaseAmount) * 100
+}
+
 func generateRandomNumbers() []int {
 	numbers := make([]int, 0, LottoSize)
 
