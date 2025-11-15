@@ -57,3 +57,8 @@ func contains(slice []int, target int) bool {
 	}
 	return false
 }
+
+// 외부 wrapper
+func ValidatePurchaseAmount(amount int) error {
+	return validatePurchaseAmount(amount)
+}
