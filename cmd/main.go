@@ -90,6 +90,10 @@ func validatePurchaseAmount(amount int) error {
 }
 
 func parseWinningNumbers(input string) ([]int, error) {
+	if err := validateWinningFormat(input); err != nil {
+		return nil, err
+	}
+
 	tokens := splitAndClean(input)
 
 	if len(tokens) != LottoSize {
@@ -256,6 +260,21 @@ func DetermineRank(matchCount int, hasBonus bool) Rank {
 		return Rank5
 	}
 	return RankNone
+}
+
+func validateWinningFormat(input string) error {
+	for _, r := range input {
+		switch {
+		case r >= '0' && r <= '9':
+		case r == ',':
+		case r == ' ' || r == '\t':
+		default:
+			return NewUserInputError(
+				fmt.Sprintf("잘못된 문자 포함: %q (숫자와 콤마(,)만 허용됩니다)", r),
+			)
+		}
+	}
+	return nil
 }
 
 func main() {
