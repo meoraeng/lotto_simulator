@@ -13,45 +13,18 @@ import (
 func main() {
 	reader := bufio.NewReader(os.Stdin)
 
-	// 1. 구입 금액 입력
-	fmt.Println("구입금액을 입력해 주세요.")
-	amountLine, _ := reader.ReadString('\n')
-	amountLine = strings.TrimSpace(amountLine)
+	amount := readPurchaseAmount(reader)
 
-	amount, err := strconv.Atoi(amountLine)
-	if err != nil {
-		fmt.Println("[ERROR] 숫자가 아닌 값을 입력했습니다.")
-		return
-	}
-
-	lottos, err := lotto.PurchaseLottos(amount)
-	if err != nil {
-		fmt.Println(err) // 여기서 err는 이미 [ERROR] 포맷
-		return
-	}
+	lottos, _ := lotto.PurchaseLottos(amount)
 
 	fmt.Printf("\n%d개를 구매했습니다.\n", len(lottos.Lottos))
 	for _, t := range lottos.Lottos {
 		fmt.Println(formatNumbers(t.Numbers))
 	}
 
-	fmt.Println("\n당첨 번호를 입력해 주세요.")
-	winningLine, _ := reader.ReadString('\n')
-	winningLine = strings.TrimSpace(winningLine)
+	readWinningNumbers(reader, &lottos)
 
-	if err := lottos.SetWinningNumbers(winningLine); err != nil {
-		fmt.Println(err)
-		return
-	}
-
-	fmt.Println("\n보너스 번호를 입력해 주세요.")
-	bonusLine, _ := reader.ReadString('\n')
-	bonusLine = strings.TrimSpace(bonusLine)
-
-	if err := lottos.SetBonusNumber(bonusLine); err != nil {
-		fmt.Println(err)
-		return
-	}
+	readBonusNumber(reader, &lottos)
 
 	stats := lottos.CompileStatistics()
 	totalPrize := lotto.CalculateTotalPrize(stats)
@@ -81,4 +54,53 @@ func formatNumbers(nums []int) string {
 	}
 	b.WriteString("]")
 	return b.String()
+}
+
+func readPurchaseAmount(reader *bufio.Reader) int {
+	for {
+		fmt.Println("구입금액을 입력해 주세요.")
+		line, _ := reader.ReadString('\n')
+		line = strings.TrimSpace(line)
+
+		amount, err := strconv.Atoi(line)
+		if err != nil {
+			fmt.Println("[ERROR] 숫자가 아닌 값을 입력했습니다.")
+			continue
+		}
+
+		if err := lotto.ValidatePurchaseAmount(amount); err != nil {
+			fmt.Println(err)
+			continue
+		}
+
+		return amount
+	}
+}
+
+func readWinningNumbers(reader *bufio.Reader, ls *lotto.Lottos) {
+	for {
+		fmt.Println("\n당첨 번호를 입력해 주세요.")
+		line, _ := reader.ReadString('\n')
+		line = strings.TrimSpace(line)
+
+		if err := ls.SetWinningNumbers(line); err != nil {
+			fmt.Println(err)
+			continue
+		}
+		return
+	}
+}
+
+func readBonusNumber(reader *bufio.Reader, ls *lotto.Lottos) {
+	for {
+		fmt.Println("\n보너스 번호를 입력해 주세요.")
+		line, _ := reader.ReadString('\n')
+		line = strings.TrimSpace(line)
+
+		if err := ls.SetBonusNumber(line); err != nil {
+			fmt.Println(err)
+			continue
+		}
+		return
+	}
 }
