@@ -43,15 +43,66 @@ type RoundOutput struct {
 func CalculateRound(in RoundInput) RoundOutput {
 	out := newRoundOutput(in)
 
+	// 모드 선택
 	if in.Mode != ModeParimutuel {
+		// TODO: ModeFixedPayout 구현되면 여기서 위임
 		return out
 	}
 
-	for _, a := range in.Allocations {
-		calcRankPool(in, &out, a)
-	}
+	order := []Rank{Rank1, Rank2, Rank3, Rank4, Rank5}
+	allocBps := buildAllocationMap(in.Allocations)
+
+	calcBasePools(&out, in, order, allocBps)
+	applyCapAndRolldown(out.PoolAfterCap, in.CapPerRank, allocBps, order, out.RollDown)
+	calcPayoutAndCarry(&out, in, order)
 
 	return out
+}
+
+func calcBasePools(
+	out *RoundOutput,
+	in RoundInput,
+	order []Rank,
+	allocBps map[Rank]int,
+) {
+	for _, r := range order {
+		basePool := in.Sales * allocBps[r] / BasisPoints
+		carry := in.CarryIn[r]
+		pool := basePool + carry
+
+		out.PoolBefore[r] = pool
+		out.PoolAfterCap[r] = pool
+	}
+}
+
+// PoolAfterCap 기준 지급 및 이월 계산
+func calcPayoutAndCarry(
+	out *RoundOutput,
+	in RoundInput,
+	order []Rank,
+) {
+	for _, r := range order {
+		pool := out.PoolAfterCap[r]
+		winners := in.Winners[r]
+
+		if winners <= 0 {
+			// 당첨자 없으면 전체 이월
+			out.CarryOut[r] = pool
+			continue
+		}
+
+		per := pool / winners
+		total := per * winners
+
+		out.PaidPerWin[r] = per
+		out.PaidTotal[r] = total
+
+		// 잔액 이월
+		remain := pool - total
+		if remain > 0 {
+			out.CarryOut[r] = remain
+		}
+	}
 }
 
 func newRoundOutput(in RoundInput) RoundOutput {
@@ -66,22 +117,65 @@ func newRoundOutput(in RoundInput) RoundOutput {
 	}
 }
 
-func calcRankPool(in RoundInput, out *RoundOutput, a Allocation) {
-	basePool := in.Sales * a.BasisPoints / BasisPoints
-	carry := in.CarryIn[a.Rank]
-	pool := basePool + carry
-
-	out.PoolBefore[a.Rank] = pool
-	out.PoolAfterCap[a.Rank] = pool
-
-	winners := in.Winners[a.Rank]
-	if winners <= 0 {
-		// 당첨자가 없으면 전액 이월
-		out.CarryOut[a.Rank] = pool
-		return
+func buildAllocationMap(allocs []Allocation) map[Rank]int {
+	m := make(map[Rank]int)
+	for _, a := range allocs {
+		m[a.Rank] = a.BasisPoints
 	}
-	// 당첨자 있으면 균등 분배
-	perWinner := pool / winners
-	out.PaidPerWin[a.Rank] = perWinner
-	out.PaidTotal[a.Rank] = perWinner * winners
+	return m
+}
+
+func applyCapAndRolldown(
+	pool map[Rank]int,
+	caps map[Rank]int,
+	allocBasicPoints map[Rank]int,
+	order []Rank,
+	rollDown map[Rank]int,
+) {
+	for i, r := range order {
+		cap, hasCap := caps[r]
+		if !hasCap {
+			continue
+		}
+		if pool[r] <= cap {
+			continue
+		}
+
+		overflow := pool[r] - cap
+		pool[r] = cap
+		rollDown[r] += overflow
+
+		lowerRanks := order[i+1:]
+		if len(lowerRanks) == 0 {
+			// 하위 등수가 없으면, 여기서는 그냥 초과분을 버리는 정책으로 둔다.
+			// (필요하면 나중에 "특별 기금" 개념을 추가해도 됨)
+			continue
+		}
+
+		// 하위 등수 전체 비율 합
+		totalBasicPoints := 0
+		for _, lr := range lowerRanks {
+			totalBasicPoints += allocBasicPoints[lr]
+		}
+		if totalBasicPoints == 0 {
+			// 비율 정보가 없으면 가장 마지막 하위 등수에 몰아준다
+			last := lowerRanks[len(lowerRanks)-1]
+			pool[last] += overflow
+			continue
+		}
+
+		// 비례 분배 (잔액은 마지막 등수에 몰아줘서 합계 보존)
+		distributed := 0
+		for idx, lr := range lowerRanks {
+			if idx == len(lowerRanks)-1 {
+				// 마지막 등수는 나머지 전부
+				add := overflow - distributed
+				pool[lr] += add
+				break
+			}
+			add := overflow * allocBasicPoints[lr] / totalBasicPoints
+			distributed += add
+			pool[lr] += add
+		}
+	}
 }
