@@ -87,3 +87,19 @@ func rankLabel(r lotto.Rank) string {
 		return "-"
 	}
 }
+
+func printPlayerTotals(states []playerState, totals map[string]int) {
+	for _, ps := range states {
+		name := ps.Player.Name
+		spent := ps.PurchaseAmount
+		earned := totals[name]
+
+		rate := 0.0
+		if spent > 0 {
+			rate = float64(earned) / float64(spent) * 100
+		}
+
+		fmt.Printf("%s: 사용 금액 %d원, 누적 수령 금액 %d원, 누적 수익률 %.1f%%\n",
+			name, spent, earned, rate)
+	}
+}

@@ -137,3 +137,23 @@ func readBonusNumber(reader *bufio.Reader, ls *lotto.Lottos) {
 		return
 	}
 }
+
+func readRoundCount(r *bufio.Reader) int {
+	for {
+		fmt.Println("몇 회차를 시뮬레이션할까요? (기본값 1)")
+		line, _ := r.ReadString('\n')
+		line = strings.TrimSpace(line)
+
+		// 엔터만 치면 1회차
+		if line == "" {
+			return 1
+		}
+
+		n, err := strconv.Atoi(line)
+		if err != nil || n <= 0 {
+			fmt.Println(lotto.NewUserInputError("양의 정수를 입력해 주세요."))
+			continue
+		}
+		return n
+	}
+}

@@ -21,30 +21,67 @@ func main() {
 	// 모드 입력
 	mode := readMode(reader)
 	fmt.Println()
+
+	rounds := readRoundCount(reader)
+	fmt.Println()
+
 	// 플레이어 입력
 	playerStates := readPlayers(reader)
 	fmt.Println()
 
 	totalSales, players := collectPlayers(playerStates)
 
-	var winning lotto.Lottos
-	readWinningNumbers(reader, &winning)
-	readBonusNumber(reader, &winning)
+	// 회차 간 이월 상태
+	carry := make(map[lotto.Rank]int)
 
-	base := buildBaseRoundInput(mode, totalSales)
+	// 플레이어별 누적 수령액
+	totalPayouts := make(map[string]int)
 
-	in := lotto.BuildRoundInput(base, players, winning)
-	out := lotto.CalculateRound(in)
-	payouts := lotto.DistributeRewards(players, winning, out)
+	for round := 1; round <= rounds; round++ {
+		fmt.Printf("\n=== %d회차 ===\n", round)
 
-	fmt.Println("\n=== 회차 요약 ===")
-	printRoundReport(in, out)
+		// 당첨 번호 / 보너스 번호 입력
+		var winning lotto.Lottos
+		readWinningNumbers(reader, &winning)
+		readBonusNumber(reader, &winning)
 
-	fmt.Println("\n=== 플레이어별 정산 ===")
-	printPlayerPayouts(playerStates, payouts)
+		// 이번 회차 입력값 구성 (판매액 + 이월 상태 포함)
+		base := buildBaseRoundInput(mode, totalSales, carry)
+		in := lotto.BuildRoundInput(base, players, winning)
+
+		// 분배 계산
+		out := lotto.CalculateRound(in)
+
+		// 플레이어별 이번 회차 수령액 계산
+		payouts := lotto.DistributeRewards(players, winning, out)
+
+		// 회차 요약 출력
+		fmt.Println("\n--- 회차 요약 ---")
+		printRoundReport(in, out)
+
+		// 플레이어별 이번 회차 정산
+		fmt.Println("\n--- 플레이어별 정산 (이번 회차) ---")
+		printPlayerPayouts(playerStates, payouts)
+
+		// 누적 수령액에 합산
+		for name, amount := range payouts {
+			totalPayouts[name] += amount
+		}
+
+		// 다음 회차를 위해 이월 상태 업데이트
+		carry = out.CarryOut
+	}
+
+	// 2회 이상 돌렸으면 누적 정산도 보여주기 (선택)
+	if rounds > 1 {
+		fmt.Println("\n=== 전체 누적 정산 ===")
+		printPlayerTotals(playerStates, totalPayouts)
+	}
 
 	fmt.Println("\n시뮬레이션이 종료되었습니다.")
 }
+
+// 전체 판매액 합계와 Player리스트 생성
 func collectPlayers(states []playerState) (int, []lotto.Player) {
 	totalSales := 0
 	players := make([]lotto.Player, 0, len(states))
@@ -56,7 +93,11 @@ func collectPlayers(states []playerState) (int, []lotto.Player) {
 	return totalSales, players
 }
 
-func buildBaseRoundInput(mode lotto.Mode, sales int) lotto.RoundInput {
+func buildBaseRoundInput(
+	mode lotto.Mode,
+	sales int,
+	carryIn map[lotto.Rank]int,
+) lotto.RoundInput {
 	allocations := []lotto.Allocation{
 		{Rank: lotto.Rank1, BasisPoints: 7500},
 		{Rank: lotto.Rank2, BasisPoints: 1250},
@@ -81,11 +122,12 @@ func buildBaseRoundInput(mode lotto.Mode, sales int) lotto.RoundInput {
 	}
 
 	return lotto.RoundInput{
-		Mode:        mode,
-		Sales:       sales,
-		CarryIn:     make(map[lotto.Rank]int),
-		Allocations: allocations,
-		CapPerRank:  caps,
-		FixedPayout: fixedPayout,
+		Mode:         mode,
+		Sales:        sales,
+		CarryIn:      carryIn,
+		Allocations:  allocations,
+		CapPerRank:   caps,
+		RoundingUnit: 100,
+		FixedPayout:  fixedPayout,
 	}
 }
