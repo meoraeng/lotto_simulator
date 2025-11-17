@@ -23,9 +23,11 @@ type RoundInput struct {
 	Sales   int          // 회차 판매액
 	Winners map[Rank]int // 등수별 당첨자 수
 	CarryIn map[Rank]int // 등수별 이월 금액(없으면 0)
-
+	// 분배 모드
 	Allocations []Allocation // 등수별 배정 비율
 	CapPerRank  map[Rank]int // 등수별 상한 금액
+	// 고정 모드
+	FixedPayout map[Rank]int
 }
 
 // 한 회차 분배 결과
@@ -38,25 +40,38 @@ type RoundOutput struct {
 	PaidTotal    map[Rank]int // 등수별 총 지급액
 	CarryOut     map[Rank]int // 등수별 다음 회차로 이월되는 금액
 	RollDown     map[Rank]int // 상한 초과로 하위 등수로 내려보낸 금액
+
+	RoundRemainder int // 판매액 중 풀에 배정되지 않은 라운드 잔액
 }
 
 func CalculateRound(in RoundInput) RoundOutput {
 	out := newRoundOutput(in)
 
-	// 모드 선택
-	if in.Mode != ModeParimutuel {
-		// TODO: ModeFixedPayout 구현되면 여기서 위임
-		return out
+	switch in.Mode {
+	case ModeParimutuel:
+		calcParimutuelRound(&out, in)
+	case ModeFixedPayout:
+		calcFixedPayoutRound(&out, in)
+	default:
 	}
 
+	return out
+}
+
+func calcParimutuelRound(out *RoundOutput, in RoundInput) {
 	order := []Rank{Rank1, Rank2, Rank3, Rank4, Rank5}
 	allocBps := buildAllocationMap(in.Allocations)
 
-	calcBasePools(&out, in, order, allocBps)
-	applyCapAndRolldown(out.PoolAfterCap, in.CapPerRank, allocBps, order, out.RollDown)
-	calcPayoutAndCarry(&out, in, order)
+	allocatedFromSales := calcBasePools(out, in, order, allocBps)
+	// 잔액 기록
+	out.RoundRemainder = in.Sales - allocatedFromSales
+	if out.RoundRemainder < 0 {
+		// 비정상 설정 방어
+		out.RoundRemainder = 0
+	}
 
-	return out
+	applyCapAndRolldown(out.PoolAfterCap, in.CapPerRank, allocBps, order, out.RollDown)
+	calcPayoutAndCarry(out, in, order)
 }
 
 func calcBasePools(
@@ -64,15 +79,22 @@ func calcBasePools(
 	in RoundInput,
 	order []Rank,
 	allocBps map[Rank]int,
-) {
+) int {
+	allocatedFromSales := 0
+
 	for _, r := range order {
-		basePool := in.Sales * allocBps[r] / BasisPoints
+		bps := allocBps[r]
+		basePool := in.Sales * bps / BasisPoints
+		allocatedFromSales += basePool
+
 		carry := in.CarryIn[r]
 		pool := basePool + carry
 
 		out.PoolBefore[r] = pool
 		out.PoolAfterCap[r] = pool
 	}
+
+	return allocatedFromSales
 }
 
 // PoolAfterCap 기준 지급 및 이월 계산
@@ -103,26 +125,6 @@ func calcPayoutAndCarry(
 			out.CarryOut[r] = remain
 		}
 	}
-}
-
-func newRoundOutput(in RoundInput) RoundOutput {
-	return RoundOutput{
-		Sales:        in.Sales,
-		PoolBefore:   make(map[Rank]int),
-		PoolAfterCap: make(map[Rank]int),
-		PaidPerWin:   make(map[Rank]int),
-		PaidTotal:    make(map[Rank]int),
-		CarryOut:     make(map[Rank]int),
-		RollDown:     make(map[Rank]int),
-	}
-}
-
-func buildAllocationMap(allocs []Allocation) map[Rank]int {
-	m := make(map[Rank]int)
-	for _, a := range allocs {
-		m[a.Rank] = a.BasisPoints
-	}
-	return m
 }
 
 func applyCapAndRolldown(
@@ -178,4 +180,52 @@ func applyCapAndRolldown(
 			pool[lr] += add
 		}
 	}
+}
+
+func calcFixedPayoutRound(out *RoundOutput, in RoundInput) {
+	// 등수별 winners 수와 FixedPayout을 이용해 직접 지급액 계산.
+	totalPaid := 0
+
+	for rank, winners := range in.Winners {
+		if winners <= 0 {
+			continue
+		}
+
+		fixed := in.FixedPayout[rank] // 존재하지 않으면 0
+		if fixed <= 0 {
+			continue
+		}
+
+		out.PaidPerWin[rank] = fixed
+
+		total := fixed * winners
+		out.PaidTotal[rank] = total
+		totalPaid += total
+	}
+	// 판매액 있으면 잔액 기록
+	if in.Sales > totalPaid {
+		out.RoundRemainder = in.Sales - totalPaid
+	} else {
+		out.RoundRemainder = 0
+	}
+}
+
+func newRoundOutput(in RoundInput) RoundOutput {
+	return RoundOutput{
+		Sales:        in.Sales,
+		PoolBefore:   make(map[Rank]int),
+		PoolAfterCap: make(map[Rank]int),
+		PaidPerWin:   make(map[Rank]int),
+		PaidTotal:    make(map[Rank]int),
+		CarryOut:     make(map[Rank]int),
+		RollDown:     make(map[Rank]int),
+	}
+}
+
+func buildAllocationMap(allocs []Allocation) map[Rank]int {
+	m := make(map[Rank]int)
+	for _, a := range allocs {
+		m[a.Rank] = a.BasisPoints
+	}
+	return m
 }
