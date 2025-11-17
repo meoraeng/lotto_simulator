@@ -130,7 +130,7 @@ func calcPayoutAndCarry(
 func applyCapAndRolldown(
 	pool map[Rank]int,
 	caps map[Rank]int,
-	allocBasicPoints map[Rank]int,
+	allocBps map[Rank]int,
 	order []Rank,
 	rollDown map[Rank]int,
 ) {
@@ -157,7 +157,7 @@ func applyCapAndRolldown(
 		// 하위 등수 전체 비율 합
 		totalBasicPoints := 0
 		for _, lr := range lowerRanks {
-			totalBasicPoints += allocBasicPoints[lr]
+			totalBasicPoints += allocBps[lr]
 		}
 		if totalBasicPoints == 0 {
 			// 비율 정보가 없으면 가장 마지막 하위 등수에 몰아준다
@@ -175,7 +175,7 @@ func applyCapAndRolldown(
 				pool[lr] += add
 				break
 			}
-			add := overflow * allocBasicPoints[lr] / totalBasicPoints
+			add := overflow * allocBps[lr] / totalBasicPoints
 			distributed += add
 			pool[lr] += add
 		}
