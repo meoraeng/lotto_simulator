@@ -50,7 +50,11 @@ func main() {
 		in := lotto.BuildRoundInput(base, players, winning)
 
 		// 분배 계산
-		out := lotto.CalculateRound(in)
+		out, err := lotto.CalculateRound(in)
+		if err != nil {
+			printError(fmt.Errorf("계산 중 오류 발생: %w", err))
+			return
+		}
 
 		// 플레이어별 이번 회차 수령액 계산
 		payouts := lotto.DistributeRewards(players, winning, out)

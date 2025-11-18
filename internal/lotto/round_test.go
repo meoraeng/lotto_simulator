@@ -22,7 +22,10 @@ func TestCalculateRound_DistributeMode_BasicDistribute(t *testing.T) {
 		RoundingUnit: 1, // 라운딩 없이 1원 단위
 	}
 
-	out := CalculateRound(in)
+	out, err := CalculateRound(in)
+	if err != nil {
+		t.Fatalf("라운드 계산 중 에러가 발생했습니다: %v", err)
+	}
 
 	// PoolBefore 체크
 	if got := out.PoolBefore[Rank1]; got != 750_000 {
@@ -85,7 +88,10 @@ func TestCalculateRound_분배모드_상한과비례롤다운(t *testing.T) {
 		RoundingUnit: 1,
 	}
 
-	out := CalculateRound(in)
+	out, err := CalculateRound(in)
+	if err != nil {
+		t.Fatalf("라운드 계산 중 에러가 발생했습니다: %v", err)
+	}
 
 	// 기본 풀: 1등 500_000, 2등 300_000, 3등 200_000
 	// 1등 캡: 400_000, overflow: 100_000
@@ -139,7 +145,10 @@ func TestCalculateRound_DistributeMode_RoundingValidate(t *testing.T) {
 		RoundingUnit: 100, // 100원 단위 내림
 	}
 
-	out := CalculateRound(in)
+	out, err := CalculateRound(in)
+	if err != nil {
+		t.Fatalf("라운드 계산 중 에러가 발생했습니다: %v", err)
+	}
 
 	// 풀 자체는 10,005
 	if out.PoolBefore[Rank1] != 10_005 {
@@ -176,7 +185,10 @@ func TestCalculateRound_Distribute_NoWinnner_AllCarry(t *testing.T) {
 		RoundingUnit: 1,
 	}
 
-	out := CalculateRound(in)
+	out, err := CalculateRound(in)
+	if err != nil {
+		t.Fatalf("라운드 계산 중 에러가 발생했습니다: %v", err)
+	}
 
 	// PoolBefore = Sales + CarryIn = 600,000
 	if out.PoolBefore[Rank1] != 600_000 {
@@ -203,7 +215,10 @@ func TestCalculateRound_FixedMode_MultiWinners(t *testing.T) {
 		},
 	}
 
-	out := CalculateRound(in)
+	out, err := CalculateRound(in)
+	if err != nil {
+		t.Fatalf("라운드 계산 중 에러가 발생했습니다: %v", err)
+	}
 
 	if out.PaidPerWin[Rank5] != Rank5.Prize() {
 		t.Fatalf("5등 1인당 지급액이 예상과 다릅니다. got=%d, want=%d",

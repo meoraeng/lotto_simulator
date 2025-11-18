@@ -90,9 +90,4 @@ func TestSimulateSeries_LengthMismatchReturnsError(t *testing.T) {
 	if err == nil {
 		t.Fatalf("입력 길이가 다를 때 에러가 발생해야 합니다.")
 	}
-
-	// 에러 타입이 UserInputError인지 정도만 확인 (메시지 전체 비교 X)
-	if _, ok := err.(UserInputError); !ok {
-		t.Fatalf("UserInputError 타입의 에러가 발생해야 합니다. got=%T", err)
-	}
 }

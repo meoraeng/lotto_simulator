@@ -2,14 +2,13 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 
 	"github.com/meoraeng/lotto_simulator/internal/lotto"
 )
-
-// -------------------- 입력 처리 --------------------
 
 func readMode(reader *bufio.Reader) lotto.Mode {
 	for {
@@ -27,7 +26,7 @@ func readMode(reader *bufio.Reader) lotto.Mode {
 		case "2":
 			return lotto.ModeParimutuel
 		default:
-			fmt.Println(lotto.NewUserInputError("1 또는 2를 입력해야 합니다."))
+			printError(errors.New("1 또는 2를 입력해야 합니다."))
 		}
 	}
 }
@@ -40,7 +39,7 @@ func readPlayers(reader *bufio.Reader) []playerState {
 
 		n, err := strconv.Atoi(line)
 		if err != nil || n <= 0 {
-			fmt.Println(lotto.NewUserInputError("1 이상의 숫자를 입력해야 합니다."))
+			printError(errors.New("1 이상의 숫자를 입력해야 합니다."))
 			continue
 		}
 
@@ -53,7 +52,7 @@ func readPlayers(reader *bufio.Reader) []playerState {
 
 			lottos, err := lotto.PurchaseLottos(amount)
 			if err != nil {
-				fmt.Println("[FATAL] 로또 구매 중 오류 발생:", err)
+				fmt.Println("로또 구매 중 오류 발생:", err)
 				continue
 			}
 
@@ -82,7 +81,7 @@ func readPlayerName(reader *bufio.Reader) string {
 		name := strings.TrimSpace(line)
 
 		if name == "" {
-			fmt.Println(lotto.NewUserInputError("빈 이름은 사용할 수 없습니다."))
+			printError(errors.New("빈 이름은 사용할 수 없습니다."))
 			continue
 		}
 		return name
@@ -97,7 +96,7 @@ func readPurchaseAmount(reader *bufio.Reader) int {
 
 		amount, err := strconv.Atoi(line)
 		if err != nil {
-			fmt.Println(lotto.NewUserInputError("숫자가 아닌 값을 입력했습니다."))
+			printError(errors.New("숫자가 아닌 값을 입력했습니다."))
 			continue
 		}
 
@@ -151,7 +150,7 @@ func readRoundCount(r *bufio.Reader) int {
 
 		n, err := strconv.Atoi(line)
 		if err != nil || n <= 0 {
-			fmt.Println(lotto.NewUserInputError("양의 정수를 입력해 주세요."))
+			printError(errors.New("양의 정수를 입력해 주세요."))
 			continue
 		}
 		return n
