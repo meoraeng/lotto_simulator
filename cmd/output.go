@@ -24,33 +24,64 @@ func formatNumbers(nums []int) string {
 }
 
 func printRoundReport(in lotto.RoundInput, out lotto.RoundOutput) {
+	fmt.Printf("총 판매액: %d원\n", in.Sales)
+	fmt.Printf("라운드 잔액(RoundRemainder): %d원\n\n", out.RoundRemainder)
+
+	switch in.Mode {
+	case lotto.ModeParimutuel:
+		printParimutuelReport(in, out)
+	case lotto.ModeFixedPayout:
+		printFixedPayoutReport(in, out)
+	default:
+		fmt.Println("(알 수 없는 모드입니다)")
+	}
+}
+
+func printParimutuelReport(in lotto.RoundInput, out lotto.RoundOutput) {
+	// 헤더
+	fmt.Printf(
+		"%4s | %10s | %10s | %8s | %10s | %12s | %12s | %10s\n",
+		"Rank", "PoolB", "PoolA", "RDown", "WinCnt", "PerWin", "Total", "Carry",
+	)
+	fmt.Println(strings.Repeat("-", 100))
+
 	order := []lotto.Rank{lotto.Rank1, lotto.Rank2, lotto.Rank3, lotto.Rank4, lotto.Rank5}
 
-	fmt.Printf("총 판매액: %d원\n", out.Sales)
-	fmt.Printf("라운드 잔액(RoundRemainder): %d원\n", out.RoundRemainder)
-	fmt.Println()
-	fmt.Println("등수 | 풀(전) | 풀(후) | 롤다운 | 당첨자 수 | 인당 지급액 | 총 지급액 | 이월")
-	fmt.Println("--------------------------------------------------------------------------")
+	for i, r := range order {
+		rankNo := i + 1
 
-	for _, r := range order {
-		label := rankLabel(r)
-		winners := in.Winners[r]
-		poolBefore := out.PoolBefore[r]
-		poolAfter := out.PoolAfterCap[r]
-		rollDown := out.RollDown[r]
-		perWin := out.PaidPerWin[r]
-		total := out.PaidTotal[r]
-		carry := out.CarryOut[r]
+		fmt.Printf(
+			"%4d | %10d | %10d | %8d | %10d | %12d | %12d | %10d\n",
+			rankNo,
+			out.PoolBefore[r],
+			out.PoolAfterCap[r],
+			out.RollDown[r],
+			in.Winners[r],
+			out.PaidPerWin[r],
+			out.PaidTotal[r],
+			out.CarryOut[r],
+		)
+	}
+}
 
-		fmt.Printf("%4s | %10d | %18d | %7d | %8d | %10d | %9d | %7d\n",
-			label,
-			poolBefore,
-			poolAfter,
-			rollDown,
-			winners,
-			perWin,
-			total,
-			carry,
+func printFixedPayoutReport(in lotto.RoundInput, out lotto.RoundOutput) {
+	fmt.Printf(
+		"%4s | %10s | %12s | %12s\n",
+		"Rank", "WinCnt", "PerWin", "Total",
+	)
+	fmt.Println(strings.Repeat("-", 48))
+
+	order := []lotto.Rank{lotto.Rank1, lotto.Rank2, lotto.Rank3, lotto.Rank4, lotto.Rank5}
+
+	for i, r := range order {
+		rankNo := i + 1
+
+		fmt.Printf(
+			"%4d | %10d | %12d | %12d\n",
+			rankNo,
+			in.Winners[r],
+			out.PaidPerWin[r],
+			out.PaidTotal[r],
 		)
 	}
 }

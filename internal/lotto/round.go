@@ -24,8 +24,9 @@ type RoundInput struct {
 	Winners map[Rank]int // 등수별 당첨자 수
 	CarryIn map[Rank]int // 등수별 이월 금액(없으면 0)
 	// 분배 모드
-	Allocations []Allocation // 등수별 배정 비율
-	CapPerRank  map[Rank]int // 등수별 상한 금액
+	Allocations  []Allocation // 등수별 배정 비율
+	CapPerRank   map[Rank]int // 등수별 상한 금액
+	RoundingUnit int          // 라운딩 단위 (1, 10, 100단위 내림)
 	// 고정 모드
 	FixedPayout map[Rank]int
 }
@@ -112,11 +113,22 @@ func calcPayoutAndCarry(
 			out.CarryOut[r] = pool
 			continue
 		}
+		// 라운딩 단위 설정(0이하면 1원 단위 취급)
+		unit := in.RoundingUnit
+		if unit <= 0 {
+			unit = 1
+		}
 
-		per := pool / winners
-		total := per * winners
+		// 1인당 받아야 할 금액
+		rawPer := pool / winners
 
-		out.PaidPerWin[r] = per
+		// 라운딩 규칙 적용(unit 단위로 내림)
+		roundedPer := (rawPer / unit) * unit
+
+		//모든 당첨자에게 roundedPer씩 지급
+		total := roundedPer * winners
+
+		out.PaidPerWin[r] = roundedPer
 		out.PaidTotal[r] = total
 
 		// 잔액 이월
@@ -148,11 +160,6 @@ func applyCapAndRolldown(
 		rollDown[r] += overflow
 
 		lowerRanks := order[i+1:]
-		if len(lowerRanks) == 0 {
-			// 하위 등수가 없으면, 여기서는 그냥 초과분을 버리는 정책으로 둔다.
-			// (필요하면 나중에 "특별 기금" 개념을 추가해도 됨)
-			continue
-		}
 
 		// 하위 등수 전체 비율 합
 		totalBasicPoints := 0
