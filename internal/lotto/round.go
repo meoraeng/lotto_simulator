@@ -18,34 +18,38 @@ type Allocation struct {
 
 // 한 회차당 필요한 입력값
 type RoundInput struct {
-	Mode Mode
-
-	Sales   int          // 회차 판매액
-	Winners map[Rank]int // 등수별 당첨자 수
-	CarryIn map[Rank]int // 등수별 이월 금액(없으면 0)
+	Mode Mode `json:"mode"`
+	// 회차 판매액
+	Sales   int          `json:"sales"`
+	Winners map[Rank]int `json:"winners"` // 등수별 당첨자 수
+	CarryIn map[Rank]int `json:"carryIn"` // 등수별 이월 금액(없으면 0)
 	// 분배 모드
-	Allocations  []Allocation // 등수별 배정 비율
-	CapPerRank   map[Rank]int // 등수별 상한 금액
-	RoundingUnit int          // 라운딩 단위 (1, 10, 100단위 내림)
+	Allocations  []Allocation `json:"allocations"`  // 등수별 배정 비율
+	CapPerRank   map[Rank]int `json:"capPerRank"`   // 등수별 상한 금액
+	RoundingUnit int          `json:"roundingUnit"` // 라운딩 단위 (1, 10, 100단위 내림)
 	// 고정 모드
-	FixedPayout map[Rank]int
+	FixedPayout map[Rank]int `json:"fixedPayout"`
 }
 
 // 한 회차 분배 결과
 type RoundOutput struct {
-	Sales int
+	Sales int `json:"sales"`
 
-	PoolBefore   map[Rank]int // 이월 포함, 상한/롤다운 적용 전 풀 금액
-	PoolAfterCap map[Rank]int // 상한 적용 후 풀 금액
-	PaidPerWin   map[Rank]int // 등수별 1인당 지급액
-	PaidTotal    map[Rank]int // 등수별 총 지급액
-	CarryOut     map[Rank]int // 등수별 다음 회차로 이월되는 금액
-	RollDown     map[Rank]int // 상한 초과로 하위 등수로 내려보낸 금액
+	PoolBefore   map[Rank]int `json:"poolBefore"`   // 이월 포함, 상한/롤다운 적용 전 풀 금액
+	PoolAfterCap map[Rank]int `json:"poolAfterCap"` // 상한 적용 후 풀 금액
+	PaidPerWin   map[Rank]int `json:"paidPerWin"`   // 등수별 1인당 지급액
+	PaidTotal    map[Rank]int `json:"paidTotal"`    // 등수별 총 지급액
+	CarryOut     map[Rank]int `json:"carryOut"`     // 등수별 다음 회차로 이월되는 금액
+	RollDown     map[Rank]int `json:"rollDown"`     // 상한 초과로 하위 등수로 내려보낸 금액
 
-	RoundRemainder int // 판매액 중 풀에 배정되지 않은 라운드 잔액
+	RoundRemainder int `json:"roundRemainder"` // 판매액 중 풀에 배정되지 않은 라운드 잔액
 }
 
-func CalculateRound(in RoundInput) RoundOutput {
+func CalculateRound(in RoundInput) (RoundOutput, error) {
+	if in.Sales < 0 { // 판매액 검증
+		return RoundOutput{}, ErrNegativeSales
+	}
+
 	out := newRoundOutput(in)
 
 	switch in.Mode {
@@ -54,9 +58,10 @@ func CalculateRound(in RoundInput) RoundOutput {
 	case ModeFixedPayout:
 		calcFixedPayoutRound(&out, in)
 	default:
+		return RoundOutput{}, ErrInvalidMode
 	}
 
-	return out
+	return out, nil
 }
 
 func calcParimutuelRound(out *RoundOutput, in RoundInput) {

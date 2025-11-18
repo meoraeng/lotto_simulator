@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -8,8 +9,6 @@ import (
 	"github.com/meoraeng/lotto_simulator/internal/lotto"
 	"github.com/meoraeng/lotto_simulator/internal/lotto/ui"
 )
-
-// -------------------- 출력 처리 --------------------
 
 func formatNumbers(nums []int) string {
 	var b strings.Builder
@@ -31,7 +30,7 @@ func printRoundReport(in lotto.RoundInput, out lotto.RoundOutput) {
 	case lotto.ModeFixedPayout:
 		printFixedPayoutReport(in, out)
 	default:
-		fmt.Println("지원하지 않는 모드입니다.")
+		printError(errors.New("지원하지 않는 모드입니다."))
 	}
 }
 

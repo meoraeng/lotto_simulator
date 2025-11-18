@@ -1,5 +1,7 @@
 package lotto
 
+import "fmt"
+
 // 여러 회차를 공통 규칙으로 돌리기 위한 설정
 type SeriesConfig struct {
 	Mode        Mode
@@ -17,8 +19,8 @@ func SimulateSeries(
 ) ([]RoundOutput, error) {
 
 	if len(salesPerRound) != len(winnersPerRound) {
-		return nil, NewUserInputError(
-			"회차별 판매액 개수와 당첨자 정보 개수가 일치하지 않습니다.",
+		return nil, fmt.Errorf(
+			"회차별 판매액 개수와 당첨자 정보 개수가 일치하지 않습니다",
 		)
 	}
 
@@ -35,7 +37,11 @@ func SimulateSeries(
 			CapPerRank:  cfg.CapPerRank,
 		}
 
-		out := CalculateRound(input)
+		out, err := CalculateRound(input)
+		if err != nil { // 실패하면 리턴
+			return nil, err
+		}
+
 		results = append(results, out)
 
 		// 다음 회차 이월 금액 갱신
