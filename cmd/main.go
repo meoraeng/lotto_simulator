@@ -4,103 +4,130 @@ import (
 	"bufio"
 	"fmt"
 	"os"
-	"strconv"
-	"strings"
 
 	"github.com/meoraeng/lotto_simulator/internal/lotto"
 )
 
+type playerState struct {
+	Player         lotto.Player
+	PurchaseAmount int
+}
+
 func main() {
 	reader := bufio.NewReader(os.Stdin)
 
-	amount := readPurchaseAmount(reader)
+	fmt.Println("=== 로또 시뮬레이터 ===")
+	fmt.Println()
+	// 모드 입력
+	mode := readMode(reader)
+	fmt.Println()
 
-	lottos, _ := lotto.PurchaseLottos(amount)
+	rounds := readRoundCount(reader)
+	fmt.Println()
 
-	fmt.Printf("\n%d개를 구매했습니다.\n", len(lottos.Lottos))
-	for _, t := range lottos.Lottos {
-		fmt.Println(formatNumbers(t.Numbers))
+	// 플레이어 입력
+	playerStates := readPlayers(reader)
+	fmt.Println()
+
+	totalSales, players := collectPlayers(playerStates)
+
+	// 회차 간 이월 상태
+	carry := make(map[lotto.Rank]int)
+
+	// 플레이어별 누적 수령액
+	totalPayouts := make(map[string]int)
+
+	for round := 1; round <= rounds; round++ {
+		fmt.Printf("\n=== %d회차 ===\n", round)
+
+		// 당첨 번호 / 보너스 번호 입력
+		var winning lotto.Lottos
+		readWinningNumbers(reader, &winning)
+		readBonusNumber(reader, &winning)
+
+		// 이번 회차 입력값 구성 (판매액 + 이월 상태 포함)
+		base := buildBaseRoundInput(mode, totalSales, carry)
+		in := lotto.BuildRoundInput(base, players, winning)
+
+		// 분배 계산
+		out := lotto.CalculateRound(in)
+
+		// 플레이어별 이번 회차 수령액 계산
+		payouts := lotto.DistributeRewards(players, winning, out)
+
+		// 회차 요약 출력
+		fmt.Println("\n--- 회차 요약 ---")
+		printRoundReport(in, out)
+
+		// 플레이어별 이번 회차 정산
+		fmt.Println("\n--- 플레이어별 정산 (이번 회차) ---")
+		printPlayerPayouts(playerStates, payouts)
+
+		// 누적 수령액에 합산
+		for name, amount := range payouts {
+			totalPayouts[name] += amount
+		}
+
+		// 다음 회차를 위해 이월 상태 업데이트
+		carry = out.CarryOut
 	}
 
-	readWinningNumbers(reader, &lottos)
-
-	readBonusNumber(reader, &lottos)
-
-	stats := lottos.CompileStatistics()
-	totalPrize := lotto.CalculateTotalPrize(stats)
-	profit := lotto.CalculateProfitRate(totalPrize, amount)
-
-	fmt.Println("\n당첨 통계")
-	fmt.Println("---")
-	// 5등 -> 1등 순서로 출력
-	fmt.Printf("3개 일치 (5,000원) - %d개\n", stats[lotto.Rank5])
-	fmt.Printf("4개 일치 (50,000원) - %d개\n", stats[lotto.Rank4])
-	fmt.Printf("5개 일치 (1,500,000원) - %d개\n", stats[lotto.Rank3])
-	fmt.Printf("5개 일치, 보너스 볼 일치 (30,000,000원) - %d개\n", stats[lotto.Rank2])
-	fmt.Printf("6개 일치 (2,000,000,000원) - %d개\n", stats[lotto.Rank1])
-
-	fmt.Printf("총 수익률은 %.1f%%입니다.\n", profit)
-
-}
-
-func formatNumbers(nums []int) string {
-	var b strings.Builder
-	b.WriteString("[")
-	for i, n := range nums {
-		if i > 0 {
-			b.WriteString(", ")
-		}
-		b.WriteString(strconv.Itoa(n))
+	// 2회 이상 돌렸으면 누적 정산도 보여주기 (선택)
+	if rounds > 1 {
+		fmt.Println("\n=== 전체 누적 정산 ===")
+		printPlayerTotals(playerStates, totalPayouts)
 	}
-	b.WriteString("]")
-	return b.String()
+
+	fmt.Println("\n시뮬레이션이 종료되었습니다.")
 }
 
-func readPurchaseAmount(reader *bufio.Reader) int {
-	for {
-		fmt.Println("구입금액을 입력해 주세요.")
-		line, _ := reader.ReadString('\n')
-		line = strings.TrimSpace(line)
+// 전체 판매액 합계와 Player리스트 생성
+func collectPlayers(states []playerState) (int, []lotto.Player) {
+	totalSales := 0
+	players := make([]lotto.Player, 0, len(states))
 
-		amount, err := strconv.Atoi(line)
-		if err != nil {
-			fmt.Println("[ERROR] 숫자가 아닌 값을 입력했습니다.")
-			continue
-		}
-
-		if err := lotto.ValidatePurchaseAmount(amount); err != nil {
-			fmt.Println(err)
-			continue
-		}
-
-		return amount
+	for _, ps := range states {
+		totalSales += ps.PurchaseAmount
+		players = append(players, ps.Player)
 	}
+	return totalSales, players
 }
 
-func readWinningNumbers(reader *bufio.Reader, ls *lotto.Lottos) {
-	for {
-		fmt.Println("\n당첨 번호를 입력해 주세요.")
-		line, _ := reader.ReadString('\n')
-		line = strings.TrimSpace(line)
-
-		if err := ls.SetWinningNumbers(line); err != nil {
-			fmt.Println(err)
-			continue
-		}
-		return
+func buildBaseRoundInput(
+	mode lotto.Mode,
+	sales int,
+	carryIn map[lotto.Rank]int,
+) lotto.RoundInput {
+	allocations := []lotto.Allocation{
+		{Rank: lotto.Rank1, BasisPoints: 7500},
+		{Rank: lotto.Rank2, BasisPoints: 1250},
+		{Rank: lotto.Rank3, BasisPoints: 1250},
+		{Rank: lotto.Rank4, BasisPoints: 0},
+		{Rank: lotto.Rank5, BasisPoints: 0},
 	}
-}
 
-func readBonusNumber(reader *bufio.Reader, ls *lotto.Lottos) {
-	for {
-		fmt.Println("\n보너스 번호를 입력해 주세요.")
-		line, _ := reader.ReadString('\n')
-		line = strings.TrimSpace(line)
+	caps := map[lotto.Rank]int{
+		lotto.Rank1: 2_000_000_000,
+	}
 
-		if err := ls.SetBonusNumber(line); err != nil {
-			fmt.Println(err)
-			continue
+	var fixedPayout map[lotto.Rank]int
+	if mode == lotto.ModeFixedPayout {
+		fixedPayout = map[lotto.Rank]int{
+			lotto.Rank1: lotto.Rank1.Prize(),
+			lotto.Rank2: lotto.Rank2.Prize(),
+			lotto.Rank3: lotto.Rank3.Prize(),
+			lotto.Rank4: lotto.Rank4.Prize(),
+			lotto.Rank5: lotto.Rank5.Prize(),
 		}
-		return
+	}
+
+	return lotto.RoundInput{
+		Mode:         mode,
+		Sales:        sales,
+		CarryIn:      carryIn,
+		Allocations:  allocations,
+		CapPerRank:   caps,
+		RoundingUnit: 100,
+		FixedPayout:  fixedPayout,
 	}
 }

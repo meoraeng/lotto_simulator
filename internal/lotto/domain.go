@@ -7,7 +7,7 @@ import (
 
 // 기능 추가 : 이월, 상한,
 type Lottos struct {
-	Lottos         []Lotto
+	Lottos         []Lotto // 회차당 모든 로또티켓
 	BonusNumber    int
 	WinningNumbers []int
 }
