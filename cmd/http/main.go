@@ -3,20 +3,26 @@ package main
 import (
 	"log"
 	"net/http"
+	"path/filepath"
 
-	"github.com/meoraeng/lotto_simulator/internal/httpapi"
+	"github.com/meoraeng/lotto_simulator/internal/webui"
 )
 
-const httpAddr = ":8080"
-
 func main() {
-	mux := http.NewServeMux() // 라우터
+	mux := http.NewServeMux()
 
-	h := httpapi.NewHandler()
-	h.Register(mux) // 핸들러가 엔드포인트들을 라우터에 등록
+	// 템플릿 경로
+	templatesPath := filepath.Join("internal", "webui", "templates")
 
-	log.Printf("HTTP server listening on %s\n", httpAddr)
-	if err := http.ListenAndServe(httpAddr, mux); err != nil {
+	// web UI 핸들러
+	h, err := webui.NewHandler(templatesPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	h.Register(mux)
+
+	log.Println("서버 실행중:  http://localhost:8080")
+	if err := http.ListenAndServe(":8080", mux); err != nil {
 		log.Fatal(err)
 	}
 }
