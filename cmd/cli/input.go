@@ -101,7 +101,7 @@ func readPurchaseAmount(reader *bufio.Reader) int {
 		}
 
 		if err := lotto.ValidatePurchaseAmount(amount); err != nil {
-			fmt.Println(err)
+			printError(err)
 			continue
 		}
 
@@ -116,7 +116,7 @@ func readWinningNumbers(reader *bufio.Reader, ls *lotto.Lottos) {
 		line = strings.TrimSpace(line)
 
 		if err := ls.SetWinningNumbers(line); err != nil {
-			fmt.Println(err)
+			printError(err)
 			continue
 		}
 		return
@@ -130,7 +130,7 @@ func readBonusNumber(reader *bufio.Reader, ls *lotto.Lottos) {
 		line = strings.TrimSpace(line)
 
 		if err := ls.SetBonusNumber(line); err != nil {
-			fmt.Println(err)
+			printError(err)
 			continue
 		}
 		return
@@ -150,7 +150,7 @@ func readRoundCount(r *bufio.Reader) int {
 
 		n, err := strconv.Atoi(line)
 		if err != nil || n <= 0 {
-			printError(errors.New("양의 정수를 입력해 주세요."))
+			printError(errors.New("양의 정수를 입력해 주세요"))
 			continue
 		}
 		return n
