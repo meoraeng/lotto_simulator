@@ -26,7 +26,7 @@ func readMode(reader *bufio.Reader) lotto.Mode {
 		case "2":
 			return lotto.ModeParimutuel
 		default:
-			printError(errors.New("1 또는 2를 입력해야 합니다."))
+			printError(errors.New("1 또는 2를 입력해야 합니다"))
 		}
 	}
 }
@@ -39,7 +39,7 @@ func readPlayers(reader *bufio.Reader) []playerState {
 
 		n, err := strconv.Atoi(line)
 		if err != nil || n <= 0 {
-			printError(errors.New("1 이상의 숫자를 입력해야 합니다."))
+			printError(errors.New("1 이상의 숫자를 입력해야 합니다"))
 			continue
 		}
 
@@ -81,7 +81,7 @@ func readPlayerName(reader *bufio.Reader) string {
 		name := strings.TrimSpace(line)
 
 		if name == "" {
-			printError(errors.New("빈 이름은 사용할 수 없습니다."))
+			printError(errors.New("빈 이름은 사용할 수 없습니다"))
 			continue
 		}
 		return name
@@ -96,7 +96,7 @@ func readPurchaseAmount(reader *bufio.Reader) int {
 
 		amount, err := strconv.Atoi(line)
 		if err != nil {
-			printError(errors.New("숫자가 아닌 값을 입력했습니다."))
+			printError(errors.New("숫자가 아닌 값을 입력했습니다"))
 			continue
 		}
 
