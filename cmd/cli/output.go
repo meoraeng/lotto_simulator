@@ -30,7 +30,7 @@ func printRoundReport(in lotto.RoundInput, out lotto.RoundOutput) {
 	case lotto.ModeFixedPayout:
 		printFixedPayoutReport(in, out)
 	default:
-		printError(errors.New("지원하지 않는 모드입니다."))
+		printError(errors.New("지원하지 않는 모드입니다"))
 	}
 }
 
