@@ -66,6 +66,40 @@
                     </div>
                 </div>
             </div>
+
+            {{if .PlayerSummaries}}
+            <div class="card subtle-card shadow-sm mt-3">
+                <div class="card-body p-4">
+                    <h5 class="section-title">플레이어 요약</h5>
+                    <p class="text-muted">
+                        각 플레이어의 구매 금액, 티켓 수, 수령 금액, 수익률 요약입니다.
+                    </p>
+
+                    <ul class="list-group list-group-flush">
+                        {{range .PlayerSummaries}}
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <div class="fw-semibold">{{.Name}}</div>
+                                <div class="small text-muted">
+                                    구매 금액: {{money .Amount}}원 /
+                                    티켓 수: {{.TicketCount}}장
+                                </div>
+                            </div>
+                            <div class="text-end">
+                                <div class="fw-semibold text-success">
+                                    수령 금액: {{money .Earned}}원
+                                </div>
+                                <div class="small text-muted">
+                                    수익률: {{printf "%.1f" .ProfitRate}}%
+                                </div>
+                            </div>
+                        </li>
+                        {{end}}
+                    </ul>
+                </div>
+            </div>
+            {{end}}
+
         </div>
 
         <div class="col-lg-7 mb-4">

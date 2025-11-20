@@ -63,6 +63,14 @@ type resultPageData struct {
 	RankRows []rankRowView
 }
 
+type playerSummary struct {
+	Name        string
+	Amount      int
+	TicketCount int
+	Earned      int
+	ProfitRate  float64
+}
+
 func NewHandler(templatesDir string) (*Handler, error) {
 	funcMap := template.FuncMap{
 		"add1": func(i int) int {
@@ -232,14 +240,18 @@ func (h *Handler) handleResult(w http.ResponseWriter, r *http.Request) {
 	count, _ := strconv.Atoi(r.FormValue("count"))
 	totalSales, _ := strconv.Atoi(r.FormValue("totalSales"))
 
+	// purchase.gohtml에서 넘어온 hidden 필드 기반으로
+	// playerTicketsView 슬라이스 복원
 	players := rebuildPlayersFromForm(r, count)
 
 	winningInput := r.FormValue("winningNumbers")
 	bonusInput := r.FormValue("bonusNumber")
 
+	// 모든 티켓을 한 배열로 평탄화
 	allTickets := flattenTickets(players)
 	l := lotto.Lottos{Lottos: allTickets}
 
+	// 당첨 번호 파싱/검증
 	if err := l.SetWinningNumbers(winningInput); err != nil {
 		data := purchasePageData{
 			Mode:         mode,
@@ -256,6 +268,7 @@ func (h *Handler) handleResult(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 보너스 번호 파싱/검증
 	if err := l.SetBonusNumber(bonusInput); err != nil {
 		data := purchasePageData{
 			Mode:         mode,
@@ -272,53 +285,92 @@ func (h *Handler) handleResult(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 등수별 통계
 	stats := l.CompileStatistics()
 	totalPrize := lotto.CalculateTotalPrize(stats)
 	profitRate := lotto.CalculateProfitRate(totalPrize, totalSales)
 
+	// 결과 테이블용 행
 	rankRows := []rankRowView{
 		{
 			RankLabel: "1등",
-			Condition: "6개 일치",
+			Condition: "6 match",
 			Prize:     lotto.PrizeRank1,
 			Count:     stats[lotto.Rank1],
 		},
 		{
 			RankLabel: "2등",
-			Condition: "5개 일치 + 보너스",
+			Condition: "5 + bonus",
 			Prize:     lotto.PrizeRank2,
 			Count:     stats[lotto.Rank2],
 		},
 		{
 			RankLabel: "3등",
-			Condition: "5개 일치",
+			Condition: "5 match",
 			Prize:     lotto.PrizeRank3,
 			Count:     stats[lotto.Rank3],
 		},
 		{
 			RankLabel: "4등",
-			Condition: "4개 일치",
+			Condition: "4 match",
 			Prize:     lotto.PrizeRank4,
 			Count:     stats[lotto.Rank4],
 		},
 		{
 			RankLabel: "5등",
-			Condition: "3개 일치",
+			Condition: "3 match",
 			Prize:     lotto.PrizeRank5,
 			Count:     stats[lotto.Rank5],
 		},
 	}
 
-	data := resultPageData{
-		Mode:           mode,
-		Players:        players,
-		TotalSales:     totalSales,
-		WinningNumbers: l.WinningNumbers,
-		BonusNumber:    l.BonusNumber,
-		RankCounts:     stats,
-		TotalPrize:     totalPrize,
-		ProfitRate:     profitRate,
-		RankRows:       rankRows,
+	// 도메인 Player로 변환 (티켓 분배 계산에 사용)
+	domainPlayers := make([]lotto.Player, 0, len(players))
+	for _, p := range players {
+		domainPlayers = append(domainPlayers, lotto.Player{
+			Name:    p.Name,
+			Tickets: p.Tickets,
+		})
+	}
+
+	// 고정 상금 기준 RoundInput 생성
+	roundIn := lotto.RoundInput{
+		Mode:        lotto.ModeFixedPayout,
+		Sales:       totalSales,
+		Winners:     stats,
+		FixedPayout: map[lotto.Rank]int{},
+	}
+	for _, rnk := range []lotto.Rank{
+		lotto.Rank1,
+		lotto.Rank2,
+		lotto.Rank3,
+		lotto.Rank4,
+		lotto.Rank5,
+	} {
+		roundIn.FixedPayout[rnk] = rnk.Prize()
+	}
+
+	roundOut, err := lotto.CalculateRound(roundIn)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	// 이름별 수령 금액 계산
+	payouts := lotto.DistributeRewards(domainPlayers, l, roundOut)
+
+	// 플레이어 요약 뷰
+	playerSummaries := buildPlayerSummaries(players, payouts)
+
+	data := map[string]any{
+		"Mode":            mode,
+		"TotalSales":      totalSales,
+		"WinningNumbers":  l.WinningNumbers,
+		"BonusNumber":     l.BonusNumber,
+		"RankRows":        rankRows,
+		"TotalPrize":      totalPrize,
+		"ProfitRate":      profitRate,
+		"PlayerSummaries": playerSummaries,
 	}
 
 	_ = h.tmpl.ExecuteTemplate(w, "result.gohtml", data)
@@ -341,6 +393,30 @@ func makeIndexList(n int) []int {
 		out[i] = i + 1
 	}
 	return out
+}
+
+func buildPlayerSummaries(players []playerTicketsView, payouts map[string]int) []playerSummary {
+	summaries := make([]playerSummary, 0, len(players))
+
+	for _, p := range players {
+		spent := p.Amount
+		earned := payouts[p.Name]
+
+		rate := 0.0
+		if spent > 0 {
+			rate = float64(earned) / float64(spent) * 100
+		}
+
+		summaries = append(summaries, playerSummary{
+			Name:        p.Name,
+			Amount:      spent,
+			TicketCount: len(p.Tickets),
+			Earned:      earned,
+			ProfitRate:  rate,
+		})
+	}
+
+	return summaries
 }
 
 func rebuildPlayersFromForm(r *http.Request, count int) []playerTicketsView {
