@@ -41,7 +41,7 @@
                 {{if eq .Mode 0}}고정 상금 모드{{else}}분배(패리뮤추얼) 모드{{end}}
             </div>
             <div class="text-muted small">
-                총 구매 금액: <strong>{{printf "%d" .TotalSales}}</strong>원
+                총 구매 금액: <strong>{{money .TotalSales}}</strong>원
             </div>
         </div>
     </header>
@@ -87,7 +87,7 @@
                         <tr>
                             <td>{{.RankLabel}}</td>
                             <td>{{.Condition}}</td>
-                            <td class="text-end">{{printf "%d" .Prize}}원</td>
+                            <td class="text-end">{{money .Prize}}원</td>
                             <td class="text-end">{{.Count}}개</td>
                         </tr>
                         {{end}}
@@ -109,7 +109,7 @@
                             {{printf "%.1f" .ProfitRate}}%
                         </div>
                         <div class="small text-muted">
-                            총 당첨 금액: {{printf "%d" .TotalPrize}}원
+                            총 당첨 금액: {{money .TotalPrize}}원
                         </div>
                     </div>
                 </div>
