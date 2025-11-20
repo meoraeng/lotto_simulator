@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/meoraeng/lotto_simulator/internal/formatter"
 	"github.com/meoraeng/lotto_simulator/internal/lotto"
 	"github.com/meoraeng/lotto_simulator/internal/lotto/ui"
 )
@@ -34,25 +35,56 @@ func printRoundReport(in lotto.RoundInput, out lotto.RoundOutput) {
 	}
 }
 
+func conditionLabel(r lotto.Rank) string {
+	switch r {
+	case lotto.Rank1:
+		return "6 match"
+	case lotto.Rank2:
+		return "5 + bonus"
+	case lotto.Rank3:
+		return "5 match"
+	case lotto.Rank4:
+		return "4 match"
+	case lotto.Rank5:
+		return "3 match"
+	default:
+		return "-"
+	}
+}
+
 func printFixedPayoutReport(in lotto.RoundInput, out lotto.RoundOutput) {
 	// 헤더(등수, 당첨자 수, 인당 지급액, 총 지급액)
 	fmt.Printf(
-		"%4s | %10s | %12s | %12s\n",
-		"Rank", "WinCnt", "PerWin", "Total",
+		"%4s | %-12s | %15s | %8s | %15s | %15s\n",
+		"Rank", "Cond", "Prize", "WinCnt", "PerWin", "Total",
 	)
-	fmt.Println(strings.Repeat("-", 48))
+	fmt.Println(strings.Repeat("-", 90))
 
-	order := []lotto.Rank{lotto.Rank1, lotto.Rank2, lotto.Rank3, lotto.Rank4, lotto.Rank5}
+	order := []lotto.Rank{
+		lotto.Rank1,
+		lotto.Rank2,
+		lotto.Rank3,
+		lotto.Rank4,
+		lotto.Rank5,
+	}
 
 	for i, r := range order {
 		rankNo := i + 1
 
+		cond := conditionLabel(r)
+		basePrize := formatter.Money(r.Prize())      // 기준 상금
+		perWin := formatter.Money(out.PaidPerWin[r]) // 1인당 지급액
+		total := formatter.Money(out.PaidTotal[r])   // 총 지급액
+		winCnt := in.Winners[r]
+
 		fmt.Printf(
-			"%4d | %10d | %12d | %12d\n",
+			"%4d | %-12s | %15s | %8d | %15s | %15s\n",
 			rankNo,
-			in.Winners[r],
-			out.PaidPerWin[r],
-			out.PaidTotal[r],
+			cond,
+			basePrize,
+			winCnt,
+			perWin,
+			total,
 		)
 	}
 }
