@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/meoraeng/lotto_simulator/internal/formatter"
 	"github.com/meoraeng/lotto_simulator/internal/lotto"
 )
 
@@ -77,6 +78,7 @@ func NewHandler(templatesDir string) (*Handler, error) {
 			}
 			return strings.Join(parts, sep)
 		},
+		"money": formatter.Money,
 	}
 
 	pattern := filepath.Join(templatesDir, "*.gohtml")

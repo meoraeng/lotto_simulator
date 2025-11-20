@@ -133,7 +133,7 @@
                                    min="1000" step="1000"
                                    placeholder="예: 8000">
                             <div class="form-text">
-                                1장당 {{$.LottoPrice}}원 단위로 입력해 주세요.
+                                1장당 {{money $.LottoPrice}}원 단위로 입력해 주세요.
                             </div>
                         </div>
                     </div>
@@ -163,7 +163,7 @@
                             <h6 class="fw-semibold mb-1">
                                 {{$p.Name}}
                                 <small class="text-muted">
-                                    (구매 금액: {{printf "%d" $p.Amount}}원)
+                                    (구매 금액: {{money $p.Amount}}원)
                                 </small>
                             </h6>
                             <ul class="ticket-list">
@@ -179,7 +179,7 @@
                     {{end}}
 
                     <div class="mt-3 text-muted">
-                        총 구매 금액: <strong>{{printf "%d" .TotalSales}}</strong>원
+                        총 구매 금액: <strong>{{money .TotalSales}}</strong>원
                     </div>
                 </div>
             </div>
