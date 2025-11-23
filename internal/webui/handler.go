@@ -468,13 +468,14 @@ func buildRoundInputForMode(
 	}
 
 	return lotto.RoundInput{
-		Mode:         mode,
-		Sales:        totalSales,
-		Winners:      stats,
-		CarryIn:      map[lotto.Rank]int{},
-		Allocations:  allocations,
-		CapPerRank:   caps,
-		RoundingUnit: 100,
+		Mode:           mode,
+		Sales:          totalSales,
+		Winners:        stats,
+		CarryIn:        map[lotto.Rank]int{},
+		Allocations:    allocations,
+		CapPerRank:     caps,
+		RoundingUnit:   100,
+		RollDownMethod: lotto.RollDownProportional,
 	}
 }
 

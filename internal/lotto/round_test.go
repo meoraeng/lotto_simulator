@@ -231,3 +231,54 @@ func TestCalculateRound_FixedMode_MultiWinners(t *testing.T) {
 			out.PaidTotal[Rank5], wantTotal)
 	}
 }
+
+// 상한 + 균등 롤다운 정상 작동 검증
+func TestCalculateRound_DistributeMode_CapAndEqualRollDown(t *testing.T) {
+	in := RoundInput{
+		Mode:  ModeParimutuel,
+		Sales: 1_000_000,
+		Winners: map[Rank]int{
+			Rank1: 2,
+			Rank2: 3,
+			Rank3: 4,
+		},
+		Allocations: []Allocation{
+			{Rank: Rank1, BasisPoints: 5_000},
+			{Rank: Rank2, BasisPoints: 3_000},
+			{Rank: Rank3, BasisPoints: 2_000},
+		},
+		CapPerRank: map[Rank]int{
+			Rank1: 400_000, // 1등은 최대 40만까지
+		},
+		CarryIn:        map[Rank]int{},
+		RoundingUnit:   1,
+		RollDownMethod: RollDownEqual, // 균등 분배
+	}
+
+	out, err := CalculateRound(in)
+	if err != nil {
+		t.Fatalf("라운드 계산 중 에러가 발생했습니다: %v", err)
+	}
+
+	if got := out.PoolAfterCap[Rank1]; got != 400_000 {
+		t.Errorf("1등 풀(후) 값이 예상과 다릅니다. got=%d, want=%d", got, 400_000)
+	}
+	if got := out.PoolAfterCap[Rank2]; got != 325_000 {
+		t.Errorf("2등 풀(후) 값이 예상과 다릅니다. got=%d, want=%d", got, 325_000)
+	}
+	if got := out.PoolAfterCap[Rank3]; got != 225_000 {
+		t.Errorf("3등 풀(후) 값이 예상과 다릅니다. got=%d, want=%d", got, 225_000)
+	}
+
+	if got := out.PaidPerWin[Rank1]; got != 200_000 {
+		t.Errorf("1등 1인당 지급액이 예상과 다릅니다. got=%d, want=%d", got, 200_000)
+	}
+	// 2등: 325_000 / 3 = 108_333 (라운딩 없음)
+	if got := out.PaidPerWin[Rank2]; got != 108_333 {
+		t.Errorf("2등 1인당 지급액이 예상과 다릅니다. got=%d, want=%d", got, 108_333)
+	}
+	// 3등: 225_000 / 4 = 56_250 (라운딩 없음)
+	if got := out.PaidPerWin[Rank3]; got != 56_250 {
+		t.Errorf("3등 1인당 지급액이 예상과 다릅니다. got=%d, want=%d", got, 56_250)
+	}
+}
