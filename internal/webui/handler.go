@@ -343,7 +343,7 @@ func (h *Handler) handleResult(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 등수별 통계
-	stats := l.CompileStatistics()
+	stats := l.CompileStatisticsParallel()
 
 	// 모드에 따라 RoundInput 생성
 	roundIn := buildRoundInputForMode(mode, totalSales, stats)
@@ -355,7 +355,7 @@ func (h *Handler) handleResult(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 이름별 수령 금액 계산
-	payouts := lotto.DistributeRewards(domainPlayers, *l, roundOut)
+	payouts := lotto.DistributeRewardsParallel(domainPlayers, *l, roundOut)
 
 	// 결과 테이블용 행 생성
 	rankRows := buildRankRows(mode, stats, roundOut)
@@ -652,7 +652,7 @@ func handleMultipleRounds(
 		}
 
 		// 등수별 통계
-		stats := winning.CompileStatistics()
+		stats := winning.CompileStatisticsParallel()
 
 		// 모드에 따라 RoundInput 생성 (이월 포함)
 		roundIn := buildRoundInputForModeWithCarry(mode, totalSales, stats, carry)
@@ -663,7 +663,7 @@ func handleMultipleRounds(
 		}
 
 		// 이름별 수령 금액 계산
-		payouts := lotto.DistributeRewards(domainPlayers, winning, roundOut)
+		payouts := lotto.DistributeRewardsParallel(domainPlayers, winning, roundOut)
 
 		// 누적 수령액에 합산
 		for name, amount := range payouts {

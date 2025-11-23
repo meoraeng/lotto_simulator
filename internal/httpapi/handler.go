@@ -14,7 +14,7 @@ func NewHandler() *Handler {
 	return &Handler{}
 }
 
-// 핸들러 함수 연결
+// 인터페이스 composition을 통해 공통 등록 패턴 제공
 func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/api/round", h.handleCalculateRound)
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {

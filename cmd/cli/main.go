@@ -57,7 +57,7 @@ func main() {
 		}
 
 		// 플레이어별 이번 회차 수령액 계산
-		payouts := lotto.DistributeRewards(players, winning, out)
+		payouts := lotto.DistributeRewardsParallel(players, winning, out)
 
 		// 회차 요약 출력
 		fmt.Println("\n--- 회차 요약 ---")
