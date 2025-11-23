@@ -304,7 +304,7 @@ func (h *Handler) handleResult(w http.ResponseWriter, r *http.Request) {
 
 	// 모든 티켓을 한 배열로 평탄화
 	allTickets := flattenTickets(players)
-	l := lotto.Lottos{Lottos: allTickets}
+	l := &lotto.Lottos{Lottos: allTickets}
 
 	// 당첨 번호 파싱/검증
 	if err := l.SetWinningNumbers(winningInput); err != nil {
@@ -355,7 +355,7 @@ func (h *Handler) handleResult(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 이름별 수령 금액 계산
-	payouts := lotto.DistributeRewards(domainPlayers, l, roundOut)
+	payouts := lotto.DistributeRewards(domainPlayers, *l, roundOut)
 
 	// 결과 테이블용 행 생성
 	rankRows := buildRankRows(mode, stats, roundOut)
@@ -371,8 +371,9 @@ func (h *Handler) handleResult(w http.ResponseWriter, r *http.Request) {
 		"PlayerSummaries": playerSummaries,
 	}
 
-	// 분배 모드일 때 detail row 추가
+	// 분배 모드일 때 RoundOutput과 detail row 추가
 	if mode == lotto.ModeParimutuel {
+		data["RoundOutput"] = roundOut
 		data["DetailRows"] = buildDetailRows(roundIn, roundOut)
 	}
 
