@@ -10,6 +10,14 @@ const (
 // 퍼센트 단위
 const BasisPoints = 10_000
 
+// 롤다운 분배 방식
+type RollDownMethod int
+
+const (
+	RollDownProportional RollDownMethod = iota // 비례 분배 (할당 비율에 비례)
+	RollDownEqual                              // 균등 분배 (하위 등수에 균등하게)
+)
+
 // 각 등수에 판매액의 몇 bp를 배정할 것인지
 type Allocation struct {
 	Rank        Rank
@@ -24,9 +32,10 @@ type RoundInput struct {
 	Winners map[Rank]int `json:"winners"` // 등수별 당첨자 수
 	CarryIn map[Rank]int `json:"carryIn"` // 등수별 이월 금액(없으면 0)
 	// 분배 모드
-	Allocations  []Allocation `json:"allocations"`  // 등수별 배정 비율
-	CapPerRank   map[Rank]int `json:"capPerRank"`   // 등수별 상한 금액
-	RoundingUnit int          `json:"roundingUnit"` // 라운딩 단위 (1, 10, 100단위 내림)
+	Allocations    []Allocation   `json:"allocations"`    // 등수별 배정 비율
+	CapPerRank     map[Rank]int   `json:"capPerRank"`     // 등수별 상한 금액
+	RoundingUnit   int            `json:"roundingUnit"`   // 라운딩 단위 (1, 10, 100단위 내림)
+	RollDownMethod RollDownMethod `json:"rollDownMethod"` // 롤다운 분배 방식
 	// 고정 모드
 	FixedPayout map[Rank]int `json:"fixedPayout"`
 }
@@ -72,11 +81,10 @@ func calcParimutuelRound(out *RoundOutput, in RoundInput) {
 	// 잔액 기록
 	out.RoundRemainder = in.Sales - allocatedFromSales
 	if out.RoundRemainder < 0 {
-		// 비정상 설정 방어
 		out.RoundRemainder = 0
 	}
 
-	applyCapAndRolldown(out.PoolAfterCap, in.CapPerRank, allocBps, order, out.RollDown)
+	applyCapAndRolldown(out.PoolAfterCap, in.CapPerRank, allocBps, order, out.RollDown, in.RollDownMethod)
 	calcPayoutAndCarry(out, in, order)
 }
 
@@ -150,6 +158,7 @@ func applyCapAndRolldown(
 	allocBps map[Rank]int,
 	order []Rank,
 	rollDown map[Rank]int,
+	method RollDownMethod,
 ) {
 	for i, r := range order {
 		cap, hasCap := caps[r]
@@ -165,6 +174,25 @@ func applyCapAndRolldown(
 		rollDown[r] += overflow
 
 		lowerRanks := order[i+1:]
+		if len(lowerRanks) == 0 {
+			continue
+		}
+
+		if method == RollDownEqual {
+			// 하위 등수에 균등하게 분배
+			perRank := overflow / len(lowerRanks)
+			remainder := overflow % len(lowerRanks)
+
+			for idx, lr := range lowerRanks {
+				add := perRank
+				if idx == len(lowerRanks)-1 {
+					// 마지막 등수는 나머지도 받음
+					add += remainder
+				}
+				pool[lr] += add
+			}
+			continue
+		}
 
 		// 하위 등수 전체 비율 합
 		totalBasicPoints := 0
