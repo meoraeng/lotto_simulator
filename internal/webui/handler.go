@@ -287,42 +287,6 @@ func (h *Handler) handleResult(w http.ResponseWriter, r *http.Request) {
 
 	// 등수별 통계
 	stats := l.CompileStatistics()
-	totalPrize := lotto.CalculateTotalPrize(stats)
-	profitRate := lotto.CalculateProfitRate(totalPrize, totalSales)
-
-	// 결과 테이블용 행
-	rankRows := []rankRowView{
-		{
-			RankLabel: "1등",
-			Condition: "6 match",
-			Prize:     lotto.PrizeRank1,
-			Count:     stats[lotto.Rank1],
-		},
-		{
-			RankLabel: "2등",
-			Condition: "5 + bonus",
-			Prize:     lotto.PrizeRank2,
-			Count:     stats[lotto.Rank2],
-		},
-		{
-			RankLabel: "3등",
-			Condition: "5 match",
-			Prize:     lotto.PrizeRank3,
-			Count:     stats[lotto.Rank3],
-		},
-		{
-			RankLabel: "4등",
-			Condition: "4 match",
-			Prize:     lotto.PrizeRank4,
-			Count:     stats[lotto.Rank4],
-		},
-		{
-			RankLabel: "5등",
-			Condition: "3 match",
-			Prize:     lotto.PrizeRank5,
-			Count:     stats[lotto.Rank5],
-		},
-	}
 
 	// 도메인 Player로 변환 (티켓 분배 계산에 사용)
 	domainPlayers := make([]lotto.Player, 0, len(players))
@@ -333,22 +297,8 @@ func (h *Handler) handleResult(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	// 고정 상금 기준 RoundInput 생성
-	roundIn := lotto.RoundInput{
-		Mode:        lotto.ModeFixedPayout,
-		Sales:       totalSales,
-		Winners:     stats,
-		FixedPayout: map[lotto.Rank]int{},
-	}
-	for _, rnk := range []lotto.Rank{
-		lotto.Rank1,
-		lotto.Rank2,
-		lotto.Rank3,
-		lotto.Rank4,
-		lotto.Rank5,
-	} {
-		roundIn.FixedPayout[rnk] = rnk.Prize()
-	}
+	// 모드에 따라 RoundInput 생성
+	roundIn := buildRoundInputForMode(mode, totalSales, stats)
 
 	roundOut, err := lotto.CalculateRound(roundIn)
 	if err != nil {
@@ -358,6 +308,13 @@ func (h *Handler) handleResult(w http.ResponseWriter, r *http.Request) {
 
 	// 이름별 수령 금액 계산
 	payouts := lotto.DistributeRewards(domainPlayers, l, roundOut)
+
+	// 모드에 따라 상금 계산
+	totalPrize := calculateTotalPrizeByMode(mode, stats, roundOut)
+	profitRate := lotto.CalculateProfitRate(totalPrize, totalSales)
+
+	// 결과 테이블용 행 생성 (모드에 따라 상금이 다름)
+	rankRows := buildRankRows(mode, stats, roundOut)
 
 	// 플레이어 요약 뷰
 	playerSummaries := buildPlayerSummaries(players, payouts)
@@ -478,4 +435,106 @@ func flattenTickets(players []playerTicketsView) []lotto.Lotto {
 		all = append(all, p.Tickets...)
 	}
 	return all
+}
+
+// 모드에 따라 RoundInput 생성
+func buildRoundInputForMode(
+	mode lotto.Mode,
+	totalSales int,
+	stats map[lotto.Rank]int,
+) lotto.RoundInput {
+	if mode == lotto.ModeFixedPayout {
+		// 고정 상금 모드
+		fixedPayout := map[lotto.Rank]int{
+			lotto.Rank1: lotto.Rank1.Prize(),
+			lotto.Rank2: lotto.Rank2.Prize(),
+			lotto.Rank3: lotto.Rank3.Prize(),
+			lotto.Rank4: lotto.Rank4.Prize(),
+			lotto.Rank5: lotto.Rank5.Prize(),
+		}
+		return lotto.RoundInput{
+			Mode:        mode,
+			Sales:       totalSales,
+			Winners:     stats,
+			FixedPayout: fixedPayout,
+		}
+	}
+
+	// 분배 모드
+	allocations := []lotto.Allocation{
+		{Rank: lotto.Rank1, BasisPoints: 7500},
+		{Rank: lotto.Rank2, BasisPoints: 1250},
+		{Rank: lotto.Rank3, BasisPoints: 1250},
+		{Rank: lotto.Rank4, BasisPoints: 0},
+		{Rank: lotto.Rank5, BasisPoints: 0},
+	}
+
+	caps := map[lotto.Rank]int{
+		lotto.Rank1: 2_000_000_000,
+	}
+
+	return lotto.RoundInput{
+		Mode:         mode,
+		Sales:        totalSales,
+		Winners:      stats,
+		CarryIn:      map[lotto.Rank]int{},
+		Allocations:  allocations,
+		CapPerRank:   caps,
+		RoundingUnit: 100,
+	}
+}
+
+// 모드에 따라 총 상금 계산
+func calculateTotalPrizeByMode(
+	mode lotto.Mode,
+	stats map[lotto.Rank]int,
+	roundOut lotto.RoundOutput,
+) int {
+	if mode == lotto.ModeFixedPayout {
+		return lotto.CalculateTotalPrize(stats)
+	}
+
+	// 분배 모드에서 실제 지급된 금액 합계
+	total := 0
+	for rank := range stats {
+		total += roundOut.PaidTotal[rank]
+	}
+	return total
+}
+
+// 모드에 따라 rankRows 생성
+func buildRankRows(
+	mode lotto.Mode,
+	stats map[lotto.Rank]int,
+	roundOut lotto.RoundOutput,
+) []rankRowView {
+	ranks := []struct {
+		rank      lotto.Rank
+		label     string
+		condition string
+	}{
+		{lotto.Rank1, "1등", "6 match"},
+		{lotto.Rank2, "2등", "5 + bonus"},
+		{lotto.Rank3, "3등", "5 match"},
+		{lotto.Rank4, "4등", "4 match"},
+		{lotto.Rank5, "5등", "3 match"},
+	}
+
+	rows := make([]rankRowView, 0, len(ranks))
+	for _, r := range ranks {
+		var prize int
+		if mode == lotto.ModeFixedPayout {
+			prize = r.rank.Prize()
+		} else {
+			prize = roundOut.PaidPerWin[r.rank]
+		}
+
+		rows = append(rows, rankRowView{
+			RankLabel: r.label,
+			Condition: r.condition,
+			Prize:     prize,
+			Count:     stats[r.rank],
+		})
+	}
+	return rows
 }
