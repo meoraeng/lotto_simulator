@@ -309,10 +309,6 @@ func (h *Handler) handleResult(w http.ResponseWriter, r *http.Request) {
 	// 이름별 수령 금액 계산
 	payouts := lotto.DistributeRewards(domainPlayers, l, roundOut)
 
-	// 모드에 따라 상금 계산
-	totalPrize := calculateTotalPrizeByMode(mode, stats, roundOut)
-	profitRate := lotto.CalculateProfitRate(totalPrize, totalSales)
-
 	// 결과 테이블용 행 생성 (모드에 따라 상금이 다름)
 	rankRows := buildRankRows(mode, stats, roundOut)
 
@@ -325,8 +321,6 @@ func (h *Handler) handleResult(w http.ResponseWriter, r *http.Request) {
 		"WinningNumbers":  l.WinningNumbers,
 		"BonusNumber":     l.BonusNumber,
 		"RankRows":        rankRows,
-		"TotalPrize":      totalPrize,
-		"ProfitRate":      profitRate,
 		"PlayerSummaries": playerSummaries,
 	}
 
@@ -482,24 +476,6 @@ func buildRoundInputForMode(
 		CapPerRank:   caps,
 		RoundingUnit: 100,
 	}
-}
-
-// 모드에 따라 총 상금 계산
-func calculateTotalPrizeByMode(
-	mode lotto.Mode,
-	stats map[lotto.Rank]int,
-	roundOut lotto.RoundOutput,
-) int {
-	if mode == lotto.ModeFixedPayout {
-		return lotto.CalculateTotalPrize(stats)
-	}
-
-	// 분배 모드에서 실제 지급된 금액 합계
-	total := 0
-	for rank := range stats {
-		total += roundOut.PaidTotal[rank]
-	}
-	return total
 }
 
 // 모드에 따라 rankRows 생성
