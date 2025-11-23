@@ -85,21 +85,6 @@ func (ls Lottos) CompileStatistics() map[Rank]int {
 	return stats
 }
 
-func CalculateTotalPrize(stats map[Rank]int) int {
-	total := 0
-	for rank, count := range stats {
-		total += rank.Prize() * count
-	}
-	return total
-}
-
-func CalculateProfitRate(totalPrize, purchaseAmount int) float64 {
-	if purchaseAmount == 0 {
-		return 0
-	}
-	return float64(totalPrize) / float64(purchaseAmount) * 100
-}
-
 func generateRandomNumbers() []int {
 	numbers := make([]int, 0, LottoSize)
 
