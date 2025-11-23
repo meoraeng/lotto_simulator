@@ -1,6 +1,7 @@
 package webui
 
 import (
+	"fmt"
 	"html/template"
 	"net/http"
 	"path/filepath"
@@ -30,6 +31,7 @@ type playerTicketsView struct {
 type purchasePageData struct {
 	Mode       lotto.Mode
 	Count      int
+	RoundCount int
 	IndexList  []int
 	LottoPrice int
 	Error      string
@@ -47,6 +49,17 @@ type rankRowView struct {
 	Condition string
 	Prize     int
 	Count     int
+}
+
+type detailRowView struct {
+	RankLabel  string
+	PoolBefore int
+	PoolAfter  int
+	RollDown   int
+	Winners    int
+	PerWin     int
+	Total      int
+	Carry      int
 }
 
 type resultPageData struct {
@@ -87,6 +100,16 @@ func NewHandler(templatesDir string) (*Handler, error) {
 			return strings.Join(parts, sep)
 		},
 		"money": formatter.Money,
+		"seq": func(start, end int) []int {
+			if start > end {
+				return []int{}
+			}
+			result := make([]int, end-start+1)
+			for i := range result {
+				result[i] = start + i
+			}
+			return result
+		},
 	}
 
 	pattern := filepath.Join(templatesDir, "*.gohtml")
@@ -129,7 +152,13 @@ func (h *Handler) handlePlayer(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		q := "?mode=" + strconv.Itoa(int(mode)) + "&count=" + strconv.Itoa(count)
+		roundCountStr := r.FormValue("roundCount")
+		roundCount, _ := strconv.Atoi(roundCountStr)
+		if roundCount <= 0 {
+			roundCount = 1
+		}
+
+		q := "?mode=" + strconv.Itoa(int(mode)) + "&count=" + strconv.Itoa(count) + "&rounds=" + strconv.Itoa(roundCount)
 		http.Redirect(w, r, "/purchase"+q, http.StatusSeeOther)
 
 	default:
@@ -140,7 +169,7 @@ func (h *Handler) handlePlayer(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handlePurchase(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		mode, count := readModeAndCountFromQuery(r)
+		mode, count, roundCount := readModeAndCountFromQuery(r)
 		if count <= 0 {
 			http.Redirect(w, r, "/", http.StatusSeeOther)
 			return
@@ -149,6 +178,7 @@ func (h *Handler) handlePurchase(w http.ResponseWriter, r *http.Request) {
 		data := purchasePageData{
 			Mode:       mode,
 			Count:      count,
+			RoundCount: roundCount,
 			IndexList:  makeIndexList(count),
 			LottoPrice: lotto.LottoPrice,
 		}
@@ -164,6 +194,8 @@ func (h *Handler) handlePurchase(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		_, _, roundCount := readModeAndCountFromQuery(r)
+
 		var players []playerTicketsView
 		totalSales := 0
 
@@ -178,6 +210,7 @@ func (h *Handler) handlePurchase(w http.ResponseWriter, r *http.Request) {
 				data := purchasePageData{
 					Mode:       mode,
 					Count:      count,
+					RoundCount: roundCount,
 					IndexList:  makeIndexList(count),
 					LottoPrice: lotto.LottoPrice,
 					Error:      errorText("이름은 비울 수 없습니다"),
@@ -191,6 +224,7 @@ func (h *Handler) handlePurchase(w http.ResponseWriter, r *http.Request) {
 				data := purchasePageData{
 					Mode:       mode,
 					Count:      count,
+					RoundCount: roundCount,
 					IndexList:  makeIndexList(count),
 					LottoPrice: lotto.LottoPrice,
 					Error:      errorMsg(err),
@@ -208,9 +242,11 @@ func (h *Handler) handlePurchase(w http.ResponseWriter, r *http.Request) {
 			})
 		}
 
+		_, _, roundCount = readModeAndCountFromQuery(r)
 		data := purchasePageData{
 			Mode:       mode,
 			Count:      count,
+			RoundCount: roundCount,
 			IndexList:  makeIndexList(count),
 			LottoPrice: lotto.LottoPrice,
 			Players:    players,
@@ -240,10 +276,29 @@ func (h *Handler) handleResult(w http.ResponseWriter, r *http.Request) {
 	count, _ := strconv.Atoi(r.FormValue("count"))
 	totalSales, _ := strconv.Atoi(r.FormValue("totalSales"))
 
-	// purchase.gohtml에서 넘어온 hidden 필드 기반으로
-	// playerTicketsView 슬라이스 복원
 	players := rebuildPlayersFromForm(r, count)
 
+	roundCount, _ := strconv.Atoi(r.FormValue("rounds"))
+	if roundCount <= 0 {
+		roundCount = 1
+	}
+
+	// 도메인 Player로 변환
+	domainPlayers := make([]lotto.Player, 0, len(players))
+	for _, p := range players {
+		domainPlayers = append(domainPlayers, lotto.Player{
+			Name:    p.Name,
+			Tickets: p.Tickets,
+		})
+	}
+
+	// 다중 회차 처리
+	if roundCount > 1 {
+		handleMultipleRounds(w, r, h, mode, totalSales, players, domainPlayers, roundCount)
+		return
+	}
+
+	// 단일 회차 처리
 	winningInput := r.FormValue("winningNumbers")
 	bonusInput := r.FormValue("bonusNumber")
 
@@ -256,6 +311,7 @@ func (h *Handler) handleResult(w http.ResponseWriter, r *http.Request) {
 		data := purchasePageData{
 			Mode:         mode,
 			Count:        count,
+			RoundCount:   roundCount,
 			IndexList:    makeIndexList(count),
 			LottoPrice:   lotto.LottoPrice,
 			Error:        errorText(err.Error()),
@@ -273,6 +329,7 @@ func (h *Handler) handleResult(w http.ResponseWriter, r *http.Request) {
 		data := purchasePageData{
 			Mode:         mode,
 			Count:        count,
+			RoundCount:   roundCount,
 			IndexList:    makeIndexList(count),
 			LottoPrice:   lotto.LottoPrice,
 			Error:        errorText(err.Error()),
@@ -288,15 +345,6 @@ func (h *Handler) handleResult(w http.ResponseWriter, r *http.Request) {
 	// 등수별 통계
 	stats := l.CompileStatistics()
 
-	// 도메인 Player로 변환 (티켓 분배 계산에 사용)
-	domainPlayers := make([]lotto.Player, 0, len(players))
-	for _, p := range players {
-		domainPlayers = append(domainPlayers, lotto.Player{
-			Name:    p.Name,
-			Tickets: p.Tickets,
-		})
-	}
-
 	// 모드에 따라 RoundInput 생성
 	roundIn := buildRoundInputForMode(mode, totalSales, stats)
 
@@ -309,10 +357,9 @@ func (h *Handler) handleResult(w http.ResponseWriter, r *http.Request) {
 	// 이름별 수령 금액 계산
 	payouts := lotto.DistributeRewards(domainPlayers, l, roundOut)
 
-	// 결과 테이블용 행 생성 (모드에 따라 상금이 다름)
+	// 결과 테이블용 행 생성
 	rankRows := buildRankRows(mode, stats, roundOut)
 
-	// 플레이어 요약 뷰
 	playerSummaries := buildPlayerSummaries(players, payouts)
 
 	data := map[string]any{
@@ -324,10 +371,15 @@ func (h *Handler) handleResult(w http.ResponseWriter, r *http.Request) {
 		"PlayerSummaries": playerSummaries,
 	}
 
+	// 분배 모드일 때 detail row 추가
+	if mode == lotto.ModeParimutuel {
+		data["DetailRows"] = buildDetailRows(roundIn, roundOut)
+	}
+
 	_ = h.tmpl.ExecuteTemplate(w, "result.gohtml", data)
 }
 
-func readModeAndCountFromQuery(r *http.Request) (lotto.Mode, int) {
+func readModeAndCountFromQuery(r *http.Request) (lotto.Mode, int, int) {
 	modeStr := r.URL.Query().Get("mode")
 	modeInt, _ := strconv.Atoi(modeStr)
 	mode := lotto.Mode(modeInt)
@@ -335,7 +387,13 @@ func readModeAndCountFromQuery(r *http.Request) (lotto.Mode, int) {
 	countStr := r.URL.Query().Get("count")
 	count, _ := strconv.Atoi(countStr)
 
-	return mode, count
+	roundCountStr := r.URL.Query().Get("rounds")
+	roundCount, _ := strconv.Atoi(roundCountStr)
+	if roundCount <= 0 {
+		roundCount = 1
+	}
+
+	return mode, count, roundCount
 }
 
 func makeIndexList(n int) []int {
@@ -371,27 +429,40 @@ func buildPlayerSummaries(players []playerTicketsView, payouts map[string]int) [
 }
 
 func rebuildPlayersFromForm(r *http.Request, count int) []playerTicketsView {
-	var players []playerTicketsView
+	players := make([]playerTicketsView, 0, count)
 
 	for i := 1; i <= count; i++ {
 		idx := strconv.Itoa(i)
 
 		name := r.FormValue("name" + idx)
-		amount, _ := strconv.Atoi(r.FormValue("amount" + idx))
+		amountStr := r.FormValue("amount" + idx)
+		amount, _ := strconv.Atoi(amountStr)
 
 		var tickets []lotto.Lotto
-		for t := 0; ; t++ {
-			key := "ticket_" + idx + "_" + strconv.Itoa(t)
-			raw := r.FormValue(key)
-			if raw == "" {
+		ticketIdx := 0
+		for {
+			ticketKey := fmt.Sprintf("ticket_%s_%d", idx, ticketIdx)
+			ticketValue := r.FormValue(ticketKey)
+			if ticketValue == "" {
 				break
 			}
 
-			nums := parseTicketNumbers(raw)
-			if len(nums) == 0 {
-				continue
+			parts := strings.Split(ticketValue, ",")
+			numbers := make([]int, 0, len(parts))
+			for _, p := range parts {
+				p = strings.TrimSpace(p)
+				if p == "" {
+					continue
+				}
+				n, _ := strconv.Atoi(p)
+				numbers = append(numbers, n)
 			}
-			tickets = append(tickets, lotto.Lotto{Numbers: nums})
+
+			if len(numbers) == 6 {
+				tickets = append(tickets, lotto.Lotto{Numbers: numbers})
+			}
+
+			ticketIdx++
 		}
 
 		players = append(players, playerTicketsView{
@@ -402,25 +473,6 @@ func rebuildPlayersFromForm(r *http.Request, count int) []playerTicketsView {
 	}
 
 	return players
-}
-
-func parseTicketNumbers(raw string) []int {
-	parts := strings.Split(raw, ",")
-	nums := make([]int, 0, len(parts))
-
-	for _, p := range parts {
-		p = strings.TrimSpace(p)
-		if p == "" {
-			continue
-		}
-		n, err := strconv.Atoi(p)
-		if err != nil {
-			continue
-		}
-		nums = append(nums, n)
-	}
-
-	return nums
 }
 
 func flattenTickets(players []playerTicketsView) []lotto.Lotto {
@@ -514,4 +566,188 @@ func buildRankRows(
 		})
 	}
 	return rows
+}
+
+// 분배 모드 상세 내용 작성을 위한 행 생성
+func buildDetailRows(
+	roundIn lotto.RoundInput,
+	roundOut lotto.RoundOutput,
+) []detailRowView {
+	ranks := []struct {
+		rank  lotto.Rank
+		label string
+	}{
+		{lotto.Rank1, "1등"},
+		{lotto.Rank2, "2등"},
+		{lotto.Rank3, "3등"},
+		{lotto.Rank4, "4등"},
+		{lotto.Rank5, "5등"},
+	}
+
+	rows := make([]detailRowView, 0, len(ranks))
+	for _, r := range ranks {
+		rows = append(rows, detailRowView{
+			RankLabel:  r.label,
+			PoolBefore: roundOut.PoolBefore[r.rank],
+			PoolAfter:  roundOut.PoolAfterCap[r.rank],
+			RollDown:   roundOut.RollDown[r.rank],
+			Winners:    roundIn.Winners[r.rank],
+			PerWin:     roundOut.PaidPerWin[r.rank],
+			Total:      roundOut.PaidTotal[r.rank],
+			Carry:      roundOut.CarryOut[r.rank],
+		})
+	}
+	return rows
+}
+
+// 다중 회차 처리
+func handleMultipleRounds(
+	w http.ResponseWriter,
+	r *http.Request,
+	h *Handler,
+	mode lotto.Mode,
+	totalSales int,
+	players []playerTicketsView,
+	domainPlayers []lotto.Player,
+	roundCount int,
+) {
+	type roundResultView struct {
+		Round          int
+		WinningNumbers []int
+		BonusNumber    int
+		Stats          map[lotto.Rank]int
+		RoundInput     lotto.RoundInput
+		RoundOutput    lotto.RoundOutput
+		RankRows       []rankRowView
+		DetailRows     []detailRowView
+		Payouts        map[string]int
+	}
+
+	roundResults := make([]roundResultView, 0, roundCount)
+	carry := make(map[lotto.Rank]int)
+	totalPayouts := make(map[string]int)
+
+	allTickets := flattenTickets(players)
+
+	for round := 1; round <= roundCount; round++ {
+		winningKey := fmt.Sprintf("winningNumbers_%d", round)
+		bonusKey := fmt.Sprintf("bonusNumber_%d", round)
+
+		winningInput := r.FormValue(winningKey)
+		bonusInput := r.FormValue(bonusKey)
+
+		if winningInput == "" || bonusInput == "" {
+			continue
+		}
+
+		var winning lotto.Lottos
+		winning.Lottos = allTickets
+
+		if err := winning.SetWinningNumbers(winningInput); err != nil {
+			continue
+		}
+		if err := winning.SetBonusNumber(bonusInput); err != nil {
+			continue
+		}
+
+		// 등수별 통계
+		stats := winning.CompileStatistics()
+
+		// 모드에 따라 RoundInput 생성 (이월 포함)
+		roundIn := buildRoundInputForModeWithCarry(mode, totalSales, stats, carry)
+
+		roundOut, err := lotto.CalculateRound(roundIn)
+		if err != nil {
+			continue
+		}
+
+		// 이름별 수령 금액 계산
+		payouts := lotto.DistributeRewards(domainPlayers, winning, roundOut)
+
+		// 누적 수령액에 합산
+		for name, amount := range payouts {
+			totalPayouts[name] += amount
+		}
+
+		// 다음 회차를 위해 이월 상태 업데이트
+		carry = roundOut.CarryOut
+
+		rankRows := buildRankRows(mode, stats, roundOut)
+		var detailRows []detailRowView
+		if mode == lotto.ModeParimutuel {
+			detailRows = buildDetailRows(roundIn, roundOut)
+		}
+
+		roundResults = append(roundResults, roundResultView{
+			Round:          round,
+			WinningNumbers: winning.WinningNumbers,
+			BonusNumber:    winning.BonusNumber,
+			Stats:          stats,
+			RoundInput:     roundIn,
+			RoundOutput:    roundOut,
+			RankRows:       rankRows,
+			DetailRows:     detailRows,
+			Payouts:        payouts,
+		})
+	}
+
+	// 플레이어별 누적 요약
+	playerSummaries := buildPlayerSummaries(players, totalPayouts)
+
+	data := map[string]any{
+		"Mode":            mode,
+		"TotalSales":      totalSales,
+		"RoundCount":      roundCount,
+		"RoundResults":    roundResults,
+		"PlayerSummaries": playerSummaries,
+	}
+
+	_ = h.tmpl.ExecuteTemplate(w, "result_multi.gohtml", data)
+}
+
+// 이월 상태를 포함한 RoundInput 생성
+func buildRoundInputForModeWithCarry(
+	mode lotto.Mode,
+	totalSales int,
+	stats map[lotto.Rank]int,
+	carryIn map[lotto.Rank]int,
+) lotto.RoundInput {
+	if mode == lotto.ModeFixedPayout {
+		fixedPayout := map[lotto.Rank]int{
+			lotto.Rank1: lotto.Rank1.Prize(),
+			lotto.Rank2: lotto.Rank2.Prize(),
+			lotto.Rank3: lotto.Rank3.Prize(),
+			lotto.Rank4: lotto.Rank4.Prize(),
+			lotto.Rank5: lotto.Rank5.Prize(),
+		}
+		return lotto.RoundInput{
+			Mode:        mode,
+			Sales:       totalSales,
+			Winners:     stats,
+			FixedPayout: fixedPayout,
+		}
+	}
+
+	allocations := []lotto.Allocation{
+		{Rank: lotto.Rank1, BasisPoints: 7500},
+		{Rank: lotto.Rank2, BasisPoints: 1250},
+		{Rank: lotto.Rank3, BasisPoints: 1250},
+		{Rank: lotto.Rank4, BasisPoints: 0},
+		{Rank: lotto.Rank5, BasisPoints: 0},
+	}
+
+	caps := map[lotto.Rank]int{
+		lotto.Rank1: 2_000_000_000,
+	}
+
+	return lotto.RoundInput{
+		Mode:           mode,
+		Sales:          totalSales,
+		Winners:        stats,
+		CarryIn:        carryIn,
+		Allocations:    allocations,
+		CapPerRank:     caps,
+		RoundingUnit:   100,
+		RollDownMethod: lotto.RollDownProportional,
+	}
 }

@@ -190,12 +190,17 @@
                 <div class="card-body p-4">
                     <h5 class="section-title">당첨 번호 입력</h5>
                     <p class="text-muted mb-3">
+                        {{if gt .RoundCount 1}}
+                        {{.RoundCount}}회차 시뮬레이션을 위해 각 회차의 당첨 번호를 입력해 주세요.
+                        {{else}}
                         발행된 티켓을 기준으로 당첨 번호와 보너스 번호를 입력하면, 최종 통계를 계산합니다.
+                        {{end}}
                     </p>
 
                     <form action="/result" method="post" class="vstack gap-3">
                         <input type="hidden" name="mode" value="{{.Mode}}">
                         <input type="hidden" name="count" value="{{.Count}}">
+                        <input type="hidden" name="rounds" value="{{.RoundCount}}">
                         <input type="hidden" name="totalSales" value="{{.TotalSales}}">
 
                         {{range $i, $p := .Players}}
@@ -209,6 +214,32 @@
                             {{end}}
                         {{end}}
 
+                        {{if gt .RoundCount 1}}
+                        {{range $r := (seq 1 .RoundCount)}}
+                        <div class="border rounded p-3 mb-3">
+                            <h6 class="fw-semibold mb-3">{{$r}}회차</h6>
+                            <div class="mb-2">
+                                <label class="form-label small fw-semibold">
+                                    당첨 번호 (쉼표로 구분, 예: 1,2,3,4,5,6)
+                                </label>
+                                <input type="text"
+                                       name="winningNumbers_{{$r}}"
+                                       class="form-control form-control-sm"
+                                       placeholder="1,2,3,4,5,6">
+                            </div>
+                            <div>
+                                <label class="form-label small fw-semibold">
+                                    보너스 번호
+                                </label>
+                                <input type="number"
+                                       name="bonusNumber_{{$r}}"
+                                       class="form-control form-control-sm"
+                                       min="1" max="45"
+                                       placeholder="예: 7">
+                            </div>
+                        </div>
+                        {{end}}
+                        {{else}}
                         <div>
                             <label class="form-label fw-semibold">
                                 당첨 번호 (쉼표로 구분, 예: 1,2,3,4,5,6)
@@ -234,6 +265,7 @@
                                 당첨 번호 6개와 중복되지 않도록 입력해 주세요.
                             </div>
                         </div>
+                        {{end}}
 
                         <div class="d-flex justify-content-end">
                             <button type="submit" class="btn btn-success">
