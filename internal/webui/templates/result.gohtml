@@ -129,6 +129,49 @@
                     </table>
                 </div>
             </div>
+
+            {{if eq .Mode 1}}
+            <div class="card subtle-card shadow-sm mb-3">
+                <div class="card-body p-4">
+                    <h5 class="section-title mb-3">분배 상세 보고서</h5>
+                    <p class="text-muted small mb-3">
+                        총 판매액: <strong>{{money .RoundOutput.Sales}}</strong>원 /
+                        라운드 잔액: <strong>{{money .RoundOutput.RoundRemainder}}</strong>원
+                    </p>
+
+                    <div class="table-responsive">
+                        <table class="table align-middle mb-0 table-sm">
+                            <thead class="table-light">
+                            <tr>
+                                <th style="width: 8%">등수</th>
+                                <th class="text-end" style="width: 15%">Pool(Before)</th>
+                                <th class="text-end" style="width: 15%">Pool(After)</th>
+                                <th class="text-end" style="width: 12%">Rolldown</th>
+                                <th class="text-end" style="width: 10%">당첨자</th>
+                                <th class="text-end" style="width: 15%">인당 지급</th>
+                                <th class="text-end" style="width: 15%">총 지급</th>
+                                <th class="text-end" style="width: 10%">이월</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            {{range .DetailRows}}
+                            <tr>
+                                <td>{{.RankLabel}}</td>
+                                <td class="text-end">{{money .PoolBefore}}원</td>
+                                <td class="text-end">{{money .PoolAfter}}원</td>
+                                <td class="text-end">{{money .RollDown}}원</td>
+                                <td class="text-end">{{.Winners}}명</td>
+                                <td class="text-end">{{money .PerWin}}원</td>
+                                <td class="text-end">{{money .Total}}원</td>
+                                <td class="text-end">{{money .Carry}}원</td>
+                            </tr>
+                            {{end}}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            {{end}}
         </div>
     </div>
 
