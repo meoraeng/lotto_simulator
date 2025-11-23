@@ -10,6 +10,11 @@ import (
 	"github.com/meoraeng/lotto_simulator/internal/lotto"
 )
 
+var modeInputMap = map[string]lotto.Mode{
+	"1": lotto.ModeFixedPayout,
+	"2": lotto.ModeParimutuel,
+}
+
 func readMode(reader *bufio.Reader) lotto.Mode {
 	for {
 		fmt.Println("모드를 선택해 주세요.")
@@ -20,14 +25,12 @@ func readMode(reader *bufio.Reader) lotto.Mode {
 		line, _ := reader.ReadString('\n')
 		line = strings.TrimSpace(line)
 
-		switch line {
-		case "1":
-			return lotto.ModeFixedPayout
-		case "2":
-			return lotto.ModeParimutuel
-		default:
+		mode, exists := modeInputMap[line]
+		if !exists {
 			printError(errors.New("1 또는 2를 입력해야 합니다"))
+			continue
 		}
+		return mode
 	}
 }
 

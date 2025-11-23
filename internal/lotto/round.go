@@ -54,6 +54,13 @@ type RoundOutput struct {
 	RoundRemainder int `json:"roundRemainder"` // 판매액 중 풀에 배정되지 않은 라운드 잔액
 }
 
+type roundCalculator func(*RoundOutput, RoundInput)
+
+var modeCalculators = map[Mode]roundCalculator{
+	ModeParimutuel:  calcParimutuelRound,
+	ModeFixedPayout: calcFixedPayoutRound,
+}
+
 func CalculateRound(in RoundInput) (RoundOutput, error) {
 	if in.Sales < 0 { // 판매액 검증
 		return RoundOutput{}, ErrNegativeSales
@@ -61,15 +68,12 @@ func CalculateRound(in RoundInput) (RoundOutput, error) {
 
 	out := newRoundOutput(in)
 
-	switch in.Mode {
-	case ModeParimutuel:
-		calcParimutuelRound(&out, in)
-	case ModeFixedPayout:
-		calcFixedPayoutRound(&out, in)
-	default:
+	calc, exists := modeCalculators[in.Mode]
+	if !exists {
 		return RoundOutput{}, ErrInvalidMode
 	}
 
+	calc(&out, in)
 	return out, nil
 }
 

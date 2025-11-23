@@ -24,32 +24,36 @@ func formatNumbers(nums []int) string {
 	return b.String()
 }
 
+type reportPrinter func(lotto.RoundInput, lotto.RoundOutput)
+
+var modeReportPrinters = map[lotto.Mode]reportPrinter{
+	lotto.ModeParimutuel:  func(in lotto.RoundInput, out lotto.RoundOutput) { fmt.Println(ui.FormatRoundReport(in, out)) },
+	lotto.ModeFixedPayout: printFixedPayoutReport,
+}
+
 func printRoundReport(in lotto.RoundInput, out lotto.RoundOutput) {
-	switch in.Mode {
-	case lotto.ModeParimutuel:
-		fmt.Println(ui.FormatRoundReport(in, out))
-	case lotto.ModeFixedPayout:
-		printFixedPayoutReport(in, out)
-	default:
+	printer, exists := modeReportPrinters[in.Mode]
+	if !exists {
 		printError(errors.New("지원하지 않는 모드입니다"))
+		return
 	}
+	printer(in, out)
+}
+
+var rankConditionLabels = map[lotto.Rank]string{
+	lotto.Rank1: "6 match",
+	lotto.Rank2: "5 + bonus",
+	lotto.Rank3: "5 match",
+	lotto.Rank4: "4 match",
+	lotto.Rank5: "3 match",
 }
 
 func conditionLabel(r lotto.Rank) string {
-	switch r {
-	case lotto.Rank1:
-		return "6 match"
-	case lotto.Rank2:
-		return "5 + bonus"
-	case lotto.Rank3:
-		return "5 match"
-	case lotto.Rank4:
-		return "4 match"
-	case lotto.Rank5:
-		return "3 match"
-	default:
+	label, exists := rankConditionLabels[r]
+	if !exists {
 		return "-"
 	}
+	return label
 }
 
 func printFixedPayoutReport(in lotto.RoundInput, out lotto.RoundOutput) {
