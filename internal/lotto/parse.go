@@ -84,11 +84,3 @@ func parseInt(s string) (int, error) {
 	return n, nil
 }
 
-// 외부 사용을 위한 래퍼
-func ParseWinningNumbers(input string) ([]int, error) {
-	return parseWinningNumbers(input)
-}
-
-func ParseBonusNumber(input string, winning []int) (int, error) {
-	return parseBonusNumber(input, winning)
-}
