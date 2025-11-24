@@ -99,20 +99,11 @@ func DistributeRewardsParallel(
 		go func(start, end int) {
 			defer wg.Done()
 
-			localRewards := make(map[string]int)
-			for j := start; j < end; j++ {
-				p := players[j]
-				for _, lotto := range p.Tickets {
-					match := lotto.matchCount(winning.WinningNumbers)
-					hasBonus := lotto.hasBonus(winning.BonusNumber)
-					rank := DetermineRank(match, hasBonus)
-
-					perWin := out.PaidPerWin[rank]
-					if perWin > 0 {
-						localRewards[p.Name] += perWin
-					}
-				}
-			}
+			localRewards := calculateRewardsForPlayersRange(
+				players[start:end],
+				winning,
+				out,
+			)
 			rewardsChan <- localRewards
 		}(start, end)
 	}
@@ -132,4 +123,17 @@ func DistributeRewardsParallel(
 	}
 
 	return rewards
+}
+
+func calculateRewardsForPlayersRange(
+	players []Player,
+	winning Lottos,
+	out RoundOutput,
+) map[string]int {
+	localRewards := make(map[string]int)
+	for _, p := range players {
+		playerReward := calculatePlayerReward(p.Tickets, p.Name, winning, out)
+		localRewards[p.Name] += playerReward
+	}
+	return localRewards
 }

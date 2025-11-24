@@ -165,65 +165,92 @@ func applyCapAndRolldown(
 	method RollDownMethod,
 ) {
 	for i, r := range order {
-		cap, hasCap := caps[r]
-		if !hasCap {
+		overflow := calculateOverflow(pool, caps, r, rollDown)
+		if overflow <= 0 {
 			continue
 		}
-		if pool[r] <= cap {
-			continue
-		}
-
-		overflow := pool[r] - cap
-		pool[r] = cap
-		rollDown[r] += overflow
 
 		lowerRanks := order[i+1:]
 		if len(lowerRanks) == 0 {
 			continue
 		}
 
-		if method == RollDownEqual {
-			// 하위 등수에 균등하게 분배
-			perRank := overflow / len(lowerRanks)
-			remainder := overflow % len(lowerRanks)
-
-			for idx, lr := range lowerRanks {
-				add := perRank
-				if idx == len(lowerRanks)-1 {
-					// 마지막 등수는 나머지도 받음
-					add += remainder
-				}
-				pool[lr] += add
-			}
-			continue
-		}
-
-		// 하위 등수 전체 비율 합
-		totalBasicPoints := 0
-		for _, lr := range lowerRanks {
-			totalBasicPoints += allocBps[lr]
-		}
-		if totalBasicPoints == 0 {
-			// 비율 정보가 없으면 가장 마지막 하위 등수에 몰아준다
-			last := lowerRanks[len(lowerRanks)-1]
-			pool[last] += overflow
-			continue
-		}
-
-		// 비례 분배 (잔액은 마지막 등수에 몰아줘서 합계 보존)
-		distributed := 0
-		for idx, lr := range lowerRanks {
-			if idx == len(lowerRanks)-1 {
-				// 마지막 등수는 나머지 전부
-				add := overflow - distributed
-				pool[lr] += add
-				break
-			}
-			add := overflow * allocBps[lr] / totalBasicPoints
-			distributed += add
-			pool[lr] += add
-		}
+		distributeOverflow(pool, lowerRanks, overflow, allocBps, method)
 	}
+}
+
+func calculateOverflow(pool map[Rank]int, caps map[Rank]int, rank Rank, rollDown map[Rank]int) int {
+	cap, hasCap := caps[rank]
+	if !hasCap {
+		return 0
+	}
+	if pool[rank] <= cap {
+		return 0
+	}
+
+	overflow := pool[rank] - cap
+	pool[rank] = cap
+	rollDown[rank] += overflow
+	return overflow
+}
+
+func distributeOverflow(
+	pool map[Rank]int,
+	lowerRanks []Rank,
+	overflow int,
+	allocBps map[Rank]int,
+	method RollDownMethod,
+) {
+	if method == RollDownEqual {
+		distributeEqually(pool, lowerRanks, overflow)
+		return
+	}
+	distributeProportionally(pool, lowerRanks, overflow, allocBps)
+}
+
+func distributeEqually(pool map[Rank]int, lowerRanks []Rank, overflow int) {
+	perRank := overflow / len(lowerRanks)
+	remainder := overflow % len(lowerRanks)
+
+	for idx, lr := range lowerRanks {
+		add := perRank
+		if idx == len(lowerRanks)-1 {
+			add += remainder
+		}
+		pool[lr] += add
+	}
+}
+
+func distributeProportionally(
+	pool map[Rank]int,
+	lowerRanks []Rank,
+	overflow int,
+	allocBps map[Rank]int,
+) {
+	totalBasicPoints := calculateTotalBasicPoints(lowerRanks, allocBps)
+	if totalBasicPoints == 0 {
+		pool[lowerRanks[len(lowerRanks)-1]] += overflow
+		return
+	}
+
+	distributed := 0
+	for idx, lr := range lowerRanks {
+		if idx == len(lowerRanks)-1 {
+			pool[lr] += overflow - distributed
+			break
+		}
+		add := overflow * allocBps[lr] / totalBasicPoints
+		distributed += add
+		pool[lr] += add
+	}
+}
+
+func calculateTotalBasicPoints(lowerRanks []Rank, allocBps map[Rank]int) int {
+	total := 0
+	for _, lr := range lowerRanks {
+		total += allocBps[lr]
+	}
+	return total
 }
 
 func calcFixedPayoutRound(out *RoundOutput, in RoundInput) {
@@ -247,11 +274,11 @@ func calcFixedPayoutRound(out *RoundOutput, in RoundInput) {
 		totalPaid += total
 	}
 	// 판매액 있으면 잔액 기록
-	if in.Sales > totalPaid {
-		out.RoundRemainder = in.Sales - totalPaid
-	} else {
-		out.RoundRemainder = 0
+	remainder := in.Sales - totalPaid
+	if remainder < 0 {
+		remainder = 0
 	}
+	out.RoundRemainder = remainder
 }
 
 func newRoundOutput(in RoundInput) RoundOutput {
